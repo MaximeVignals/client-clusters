@@ -151,7 +151,9 @@ npm run test:ui    # check desktop layouts, themes, dialogs and five emulated di
 npm run dist:win   # build the full Windows .7z install and an update-only .zip
 ```
 
-Code: `src/main.js` (files, import/export, geocoding), `src/renderer/app.js` (interface),
+Code: `src/main.js` (window) with `src/main/` (files and import/export, geocoding, Google pages, backups);
+the interface in `src/renderer/`, one script per area (`map.js`, `lists.js`, `detail.js`, `day-planner.js`,
+`google.js`, `import.js`, `backup.js`…, loaded in order by `index.html`, started by `app.js`);
 `src/renderer/hours.js` (opening hours and Google matching), `src/renderer/planning.js` (stop order, arrival times, day planner, Google Maps route links), `src/renderer/cluster.js` (grouping: towns form blocks, blocks are merged closest-first under the size and
 distance limits; big towns are split with capacity-limited k-means).
 

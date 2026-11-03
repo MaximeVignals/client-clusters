@@ -3,6 +3,7 @@
 // with day 0 = Sunday. A period with no "close" means open 24/7.
 (function (root) {
   'use strict';
+  const Cluster = typeof module !== 'undefined' && module.exports ? require('./cluster') : root.Cluster;
 
   const WEEK = 7 * 1440;
   const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -212,12 +213,8 @@
     return Math.min(1, sim);
   }
 
-  function distanceKm(a, b) {
-    const R = 6371, toR = Math.PI / 180;
-    const dLat = (b.lat - a.lat) * toR, dLng = (b.lng - a.lng) * toR;
-    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * toR) * Math.cos(b.lat * toR) * Math.sin(dLng / 2) ** 2;
-    return 2 * R * Math.asin(Math.sqrt(h));
-  }
+  // Straight-line distance, shared with cluster.js.
+  const distanceKm = (a, b) => Cluster.distanceKm(a, b);
 
   /**
    * Score Google results for a client and decide whether one is a sure match.
@@ -248,7 +245,7 @@
     return { match, candidates: scored };
   }
 
-  const api = { status, short, weekLines, weekText, parseDay, parseWeek, toLines, dayRanges, known, nameSimilarity, judge, DAY_NAMES };
+  const api = { status, short, weekLines, weekText, parseDay, parseWeek, toLines, dayRanges, known, nameSimilarity, judge, norm, DAY_NAMES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Hours = api;
 })(typeof window !== 'undefined' ? window : globalThis);

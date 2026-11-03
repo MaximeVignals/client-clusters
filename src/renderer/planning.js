@@ -3,6 +3,7 @@
 // Pure functions (no DOM, no network). Uses Hours (hours.js) for opening hours.
 (function (root) {
   'use strict';
+  const Cluster = typeof module !== 'undefined' && module.exports ? require('./cluster') : root.Cluster;
 
   const ROAD_FACTOR = 1.3;        // roads are longer than the straight line
   const MAX_WAIT = 90;            // minutes we're willing to wait for a client to open
@@ -11,12 +12,8 @@
 
   const Hours = () => root.Hours;
 
-  function distanceKm(a, b) {
-    const R = 6371, toR = Math.PI / 180;
-    const dLat = (b.lat - a.lat) * toR, dLng = (b.lng - a.lng) * toR;
-    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * toR) * Math.cos(b.lat * toR) * Math.sin(dLng / 2) ** 2;
-    return 2 * R * Math.asin(Math.sqrt(h));
-  }
+  // Straight-line distance, shared with cluster.js.
+  const distanceKm = (a, b) => Cluster.distanceKm(a, b);
   const roadKm = (a, b) => distanceKm(a, b) * ROAD_FACTOR;
 
   // Opening ranges of one weekday (0 = Sunday) in minutes from midnight, [] when closed all day,
