@@ -8,7 +8,7 @@ const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
 env.CLIENT_CLUSTERS_TEST_PROFILE = profile;
 const result = spawnSync(require('electron'), [path.join(__dirname, 'electron-smoke.cjs')], {
-  env, stdio: 'inherit', timeout: 60000,
+  env, stdio: 'inherit', timeout: env.CLIENT_CLUSTERS_UI_SCALE ? 180000 : 60000,
 });
 if (result.error) console.error(result.error.message);
 if (path.dirname(profile) !== tmpRoot) throw new Error('Invalid test profile path');

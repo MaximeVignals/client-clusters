@@ -1,6 +1,6 @@
 // Client Clusters — main process
 // Handles windows, files on disk (data, import, export) and address geocoding.
-const { app, BrowserWindow, ipcMain, dialog, shell, net, Menu, session, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, net, Menu, session, safeStorage, screen } = require('electron');
 const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -45,14 +45,16 @@ function dailyBackup() {
 
 // ---------- Window ----------
 function createWindow() {
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   win = new BrowserWindow({
-    width: 1400,
-    height: 880,
-    minWidth: 980,
-    minHeight: 620,
+    width: Math.min(1400, width),
+    height: Math.min(880, height),
+    minWidth: Math.min(640, width),
+    minHeight: Math.min(480, height),
+    show: false,
     title: 'Client Clusters',
     icon: path.join(__dirname, 'icon.png'),
-    backgroundColor: '#f6f5f2',
+    backgroundColor: '#edf0f5',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -62,6 +64,7 @@ function createWindow() {
     },
   });
   Menu.setApplicationMenu(null);
+  win.once('ready-to-show', () => win.show());
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   // Open external links in the default browser, never inside the app.
   win.webContents.setWindowOpenHandler(({ url }) => {

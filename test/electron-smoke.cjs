@@ -3,6 +3,7 @@ const { app, BrowserWindow, ipcMain, session } = require('electron');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const profile = process.env.CLIENT_CLUSTERS_TEST_PROFILE;
+const captureDocs = process.env.CLIENT_CLUSTERS_CAPTURE_DOCS === '1';
 if (!profile || path.dirname(profile) !== path.resolve(__dirname, '../.test-tmp')) throw new Error('Run via test/run-smoke.cjs');
 app.setPath('userData', profile);
 app.disableHardwareAcceleration();
@@ -14,16 +15,22 @@ ipcMain.handle('data:save', (_e, data) => { saved = data; return true; });
 ipcMain.handle('google:keyStatus', () => ({ hasKey: false, masked: '' }));
 ipcMain.handle('geo:town', () => ({ city: 'Test town', postcode: '69001' }));
 ipcMain.handle('geo:geocode', () => ({ lat: 45.76, lng: 4.84, city: 'Lyon', score: 1 }));
+ipcMain.handle('import:open', () => ({ fileName: 'Fictional clients.xlsx', sheets: [{ name: 'Clients', rows: [
+  ['Name', 'Address', 'Postcode', 'City', 'Latitude', 'Longitude'], ['Example client', '1 Example street', '69001', 'Lyon', 45.76, 4.84],
+] }] }));
 
 app.whenReady().then(async () => {
   // Avoid network access and tile failures while exercising Leaflet and the actual page.
-  session.defaultSession.protocol.handle('https', () => new Response(Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
-    { headers: { 'content-type': 'image/png' } }));
+  if (!captureDocs) session.defaultSession.protocol.handle('https', () => new Response(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#e5ebec"/><path d="M0 0H256V256" fill="none" stroke="#dbe2e4"/></svg>',
+    { headers: { 'content-type': 'image/svg+xml' } }));
+  else session.defaultSession.webRequest.onBeforeSendHeaders(
+    { urls: ['https://tile.openstreetmap.org/*', 'https://data.geopf.fr/*'] },
+    (details, callback) => { details.requestHeaders['User-Agent'] = 'ClientClusters/1.9 (desktop app; demo documentation capture)'; callback({ requestHeaders: details.requestHeaders }); });
   const win = new BrowserWindow({ show: false, width: 1400, height: 880,
-    webPreferences: { preload: path.resolve(__dirname, '../src/preload.js'), sandbox: true, contextIsolation: true, nodeIntegration: false } });
-  win.webContents.on('console-message', (_event, details) => {
-    if (details.level === 'error') errors.push(details.message);
+    webPreferences: { preload: path.resolve(__dirname, '../src/preload.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, offscreen: !!process.env.CLIENT_CLUSTERS_UI_SCALE || captureDocs } });
+  win.webContents.on('console-message', event => {
+    if (event.level === 'error') errors.push(event.message);
   });
   await win.loadFile(path.resolve(__dirname, '../src/renderer/index.html'));
   const js = code => win.webContents.executeJavaScript(code);
@@ -49,6 +56,12 @@ app.whenReady().then(async () => {
     planDayDialog(); check(!$('#modal').hidden, 'planner missing'); modalCtx.close();
     settingsDialog(); check(!$('#modal').hidden, 'settings missing'); modalCtx.close();
   `);
+  if (captureDocs) {
+    if (failed) throw new Error('Demo initialization failed; documentation capture cancelled.');
+    await require('./capture-docs.cjs')(win, js);
+    win.destroy(); app.exit(0); return;
+  }
+  if (process.env.CLIENT_CLUSTERS_UI_SCALE) await require('./desktop-ui.cjs')(win, check, js);
   await check('a planned call does not absorb a separate in-person visit', `
     const c = { visits: [] }, date = addDaysISO(todayISO(), 1);
     recordVisit(c, { date, status: 'planned', type: 'call' });

@@ -1,9 +1,51 @@
 # Client Clusters
 
-Desktop app (Windows) that reads a client list, places clients on a map, groups them by proximity
-(maximum group size adjustable, 6 by default) and keeps a log of visits.
+**Your territory. Your clients. A clearer plan for every day.**
 
-![Client Clusters with the built-in demo data: 43 fictional clients around Lyon in 8 groups](docs/screenshot.png)
+Client Clusters is a Windows desktop app for planning client rounds. Import your list, see clients on a map,
+group nearby stops, plan visits around opening hours, and keep a record of every visit and call.
+
+**[Download v1.9.0 for Windows](https://github.com/MaximeVignals/client-clusters/releases/tag/v1.9.0)** ·
+[What's new](CHANGELOG.md) · [Getting started](#download-and-install) · [Usage guide](#using-it)
+
+![Client Clusters 1.9 in light mode with fictional demo clients around Lyon](docs/screenshot.png)
+
+<details>
+<summary>See the dark theme</summary>
+
+![Client Clusters 1.9 in dark mode with the same fictional demo clients](docs/screenshot-dark.png)
+
+</details>
+
+## A desktop workspace built for client visits
+
+- **See your territory:** map clients, group nearby addresses, and find clients, towns or groups quickly.
+- **Plan practical rounds:** prioritize overdue visits, check opening hours and estimated arrival times, then open routes in Google Maps.
+- **Keep a complete history:** log visits and calls, add notes, manage priorities and confirm planned visits.
+- **Develop new business:** manage prospects and imported areas in a separate workspace, then convert prospects into clients.
+- **Work comfortably:** light, dark and system themes, keyboard shortcuts, context menus, a resizable client pane and layouts for compact or ultrawide windows.
+- **Keep your data local:** import and export Excel, CSV and Google Earth/My Maps files, and move between computers with backups.
+
+## Download and install
+
+### First installation
+
+1. Download **[ClientClusters-1.9.0-win-x64.7z](https://github.com/MaximeVignals/client-clusters/releases/download/v1.9.0/ClientClusters-1.9.0-win-x64.7z)** from the release.
+2. Extract the entire archive to a folder. Windows 11 can extract `.7z` files directly.
+3. Open **Client Clusters.exe** inside the extracted folder. Keep the accompanying files and folders together.
+4. Choose **Try with demo data** to explore using fictional clients, or import your own list.
+
+### Update an existing folder installation
+
+Download the smaller **[ClientClusters-1.9.0-update.zip](https://github.com/MaximeVignals/client-clusters/releases/download/v1.9.0/ClientClusters-1.9.0-update.zip)**
+and drop it onto **Update Client Clusters.bat** in your app folder. The updater checks the package hash and
+Electron version, keeps the previous app file, and restarts the app. This release uses Electron **44.10.1**;
+if your installation uses a different version or is an older standalone executable, use the full archive instead.
+
+Clients, visits, groups, settings and backups remain in the existing data folder. The interface redesign requires no data migration.
+See the [v1.9.0 changelog](CHANGELOG.md#190--2026-11-03) for the full list of improvements.
+
+## Privacy and technology
 
 **Stack:** Electron (sandboxed renderer, context isolation, strict CSP), vanilla JavaScript, Leaflet,
 SheetJS, JSZip. Geocoding via IGN Géoplateforme and OpenStreetMap Nominatim; optional Google Places API (New).
@@ -105,6 +147,7 @@ npm install
 npm start          # run the app
 npm test          # run core and main-process regression tests (no network)
 npm run test:smoke # run the sandboxed Electron renderer with isolated demo data (no network)
+npm run test:ui    # check desktop layouts, themes, dialogs and five emulated display scales
 npm run dist:win   # build the full Windows .7z install and an update-only .zip
 ```
 

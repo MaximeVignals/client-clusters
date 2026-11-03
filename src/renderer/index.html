@@ -2,11 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://data.geopf.fr https://tile.openstreetmap.org; connect-src 'self'">
   <title>Client Clusters</title>
   <link rel="stylesheet" href="../vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="desktop.css">
+  <script src="appearance.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -14,23 +17,20 @@
       <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="8" r="3.2" fill="currentColor" opacity=".9"/><circle cx="16.5" cy="6.5" r="2.4" fill="currentColor" opacity=".6"/><circle cx="14" cy="16" r="3.6" fill="currentColor"/><circle cx="5.5" cy="17.5" r="1.8" fill="currentColor" opacity=".5"/></svg>
       <span>Client Clusters</span>
     </div>
-    <div class="search">
-      <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <input id="search" type="search" placeholder="Search clients, cities, groups…" autocomplete="off">
-    </div>
+    <span class="workspace-label">Visit workspace</span>
     <div class="top-actions">
-      <button class="btn" id="btn-import">Import list</button>
-      <button class="btn" id="btn-add">Add client</button>
+      <button class="btn" id="btn-import" title="Import a list (Ctrl+O)">Import list</button>
+      <button class="btn primary" id="btn-add" title="Add a client (Ctrl+N)">＋ Add client</button>
       <button class="btn" id="btn-regroup">Regroup</button>
       <div class="menu-wrap">
-        <button class="btn" id="btn-export">Export ▾</button>
+        <button class="btn" id="btn-export" aria-haspopup="menu" aria-controls="export-menu">Export ▾</button>
         <div class="menu" id="export-menu" hidden>
           <button data-exp="xlsx">Excel spreadsheet (.xlsx)</button>
           <button data-exp="kmz">Google Earth / My Maps (.kmz)</button>
         </div>
       </div>
       <div class="menu-wrap">
-        <button class="btn icon" id="btn-menu" title="Settings and data">
+        <button class="btn icon" id="btn-menu" title="Settings and data" aria-label="Settings and data" aria-haspopup="menu" aria-controls="menu">
           <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
         </button>
         <div class="menu" id="menu" hidden>
@@ -39,6 +39,7 @@
           <button data-act="backup">Save a backup…</button>
           <button data-act="restore">Restore a backup…</button>
           <button data-act="folder">Open data folder</button>
+          <button id="btn-shortcuts">Keyboard shortcuts</button>
           <hr>
           <button data-act="clear" class="danger">Delete all clients…</button>
         </div>
@@ -47,32 +48,49 @@
   </header>
 
   <main class="layout">
-    <aside class="sidebar">
-      <div class="stats" id="stats"></div>
-      <div class="tabs" role="tablist">
+    <nav class="navrail" aria-label="Workspace navigation">
+      <div class="nav-caption">WORKSPACE</div>
+      <div class="tabs" role="tablist" aria-label="Workspace" aria-orientation="vertical">
         <button class="tab active" data-tab="groups" role="tab">Groups</button>
         <button class="tab" data-tab="clients" role="tab">Clients</button>
         <button class="tab" data-tab="planned" role="tab">Planned</button>
         <button class="tab" data-tab="prospecting" role="tab">Prospects</button>
-        <div class="sort-wrap">
-          <label for="sort" class="sr">Sort</label>
-          <select id="sort"></select>
-        </div>
       </div>
+      <div class="nav-bottom">
+        <label for="appearance">Appearance</label>
+        <select id="appearance" aria-label="Appearance"><option value="system">Use system</option><option value="light">Light</option><option value="dark">Dark</option></select>
+        <button class="btn ghost" id="nav-settings">⚙ Settings</button>
+        <span class="local-note">Stored on this device</span>
+      </div>
+    </nav>
+    <aside class="sidebar" aria-label="Client workspace">
+      <div class="workspace-head"><div><span class="eyebrow">YOUR TERRITORY</span><h1 id="workspace-title">Groups</h1></div><button class="btn small" id="btn-plan-day" title="Plan a day (Ctrl+Shift+P)">Plan a day</button></div>
+      <div class="stats" id="stats" aria-label="Client overview"></div>
+      <div class="search">
+        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="M20 20l-4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <input id="search" type="search" aria-label="Search clients, cities and groups" placeholder="Search clients, cities, groups…" autocomplete="off" title="Search (Ctrl+F)">
+        <kbd aria-hidden="true">Ctrl F</kbd>
+      </div>
+      <div class="list-toolbar"><span id="list-summary">Nearby client groups</span><div class="sort-wrap"><label for="sort">Sort</label><select id="sort"></select></div></div>
       <div class="banners" id="banners"></div>
-      <div class="list" id="list"></div>
+      <div class="list" id="list" role="tabpanel" tabindex="0" aria-label="Groups"></div>
     </aside>
+    <div class="splitter" id="sidebar-splitter" role="separator" tabindex="0" aria-label="Resize client workspace" aria-orientation="vertical" aria-valuemin="320" aria-valuemax="560" aria-valuenow="390"></div>
 
-    <section class="map-wrap">
-      <div id="map"></div>
+    <section class="map-wrap" aria-label="Territory map">
+      <div id="map" role="region" aria-label="Interactive client map"></div>
+      <div class="map-toolbar"><span class="map-heading">Territory overview</span><button class="btn small" id="btn-fit-map" title="Fit all visible locations">Fit to view</button></div>
       <div class="map-legend" id="legend"></div>
       <div class="place-banner" id="place-banner" hidden></div>
       <div class="select-bar" id="select-bar" hidden></div>
       <aside class="detail" id="detail" hidden></aside>
       <div class="empty" id="empty" hidden>
         <div class="empty-card">
+          <div class="welcome-symbol" aria-hidden="true">◎</div>
+          <span class="eyebrow">A CLEARER WAY TO PLAN YOUR DAY</span>
           <h1>Plan your client rounds</h1>
-          <p>Import your client list (Excel or CSV with addresses, or a KMZ/KML from Google Earth or My Maps). Clients are placed on the map and grouped with their nearest neighbours, so each group can be visited in one trip. Then note each visit as you go.</p>
+          <p>Turn your client list into practical local rounds. See who needs a visit, plan your route, and keep every conversation in one place.</p>
+          <div class="welcome-steps"><span><b>1</b> Import your clients</span><span><b>2</b> Explore nearby groups</span><span><b>3</b> Plan and track visits</span></div>
           <div class="empty-actions">
             <button class="btn primary" id="empty-import">Import a client list</button>
             <button class="btn" id="empty-demo">Try with demo data</button>
@@ -83,14 +101,16 @@
       </div>
     </section>
   </main>
+  <div class="compact-switch" role="group" aria-label="Workspace view"><button class="btn" id="view-list" aria-pressed="true">List</button><button class="btn" id="view-map" aria-pressed="false">Map &amp; details</button></div>
+  <footer class="statusbar"><span id="workspace-status">Client Clusters</span><span>Shift + drag to select on map <span class="status-divider">·</span> <button id="status-shortcuts">Keyboard shortcuts</button></span></footer>
 
   <div class="progress" id="progress" hidden>
     <div class="progress-text" id="progress-text"></div>
     <div class="progress-bar"><div id="progress-fill"></div></div>
     <button class="btn small" id="progress-stop">Stop</button>
   </div>
-  <div class="toasts" id="toasts"></div>
-  <div class="modal-backdrop" id="modal" hidden><div class="modal" id="modal-box" role="dialog" aria-modal="true"></div></div>
+  <div class="toasts" id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
+  <div class="modal-backdrop" id="modal" hidden><div class="modal" id="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1"></div></div>
 
   <script src="../vendor/leaflet/leaflet.js"></script>
   <script src="cluster.js"></script>
@@ -98,5 +118,6 @@
   <script src="planning.js"></script>
   <script src="app.js"></script>
   <script src="prospecting.js"></script>
+  <script src="desktop-ui.js"></script>
 </body>
 </html>

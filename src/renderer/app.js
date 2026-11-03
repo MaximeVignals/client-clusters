@@ -673,6 +673,7 @@ function renderTabs() {
   SORTS.groups[0][1] = homeOf() ? 'Nearest to home' : 'Group number';
   $('#sort').innerHTML = SORTS[state.tab].map(([v, l]) => `<option value="${v}"${state.sort[state.tab] === v ? ' selected' : ''}>${l}</option>`).join('');
   $('.sort-wrap').hidden = !SORTS[state.tab].length;
+  window.DesktopUI?.decorateTabs();
 }
 
 function renderBanners() {
@@ -889,9 +890,11 @@ function selectClient(id, { pan } = {}) {
   state.selectedClientId = id;
   if (c.groupId) state.selectedGroupId = c.groupId;
   renderAll(); renderDetail();
+  window.DesktopUI?.revealDetail();
   if (pan && hasLoc(c)) {
     const z = Math.max(map.getZoom(), 12);
-    const p = map.project([c.lat, c.lng], z).add([190, 0]); // keep pin clear of the detail panel
+    const overlayWidth = innerWidth < 1500 ? $('#detail').offsetWidth : 0;
+    const p = map.project([c.lat, c.lng], z).add([Math.min(overlayWidth / 2, map.getSize().x / 4), 0]);
     map.setView(map.unproject(p, z), z);
   }
   const row = document.querySelector(`[data-client="${id}"]`);
@@ -3025,15 +3028,16 @@ function loadDemo() {
 let modalCtx = null;
 function showModal(opts) {
   const back = $('#modal'), box = $('#modal-box');
+  const previousFocus = window.DesktopUI?.focusReturn(document.activeElement) || document.activeElement;
   box.className = 'modal' + (opts.wide ? ' wide' : '');
-  const close = () => { back.hidden = true; box.innerHTML = ''; modalCtx = null; opts.onClose && opts.onClose(); };
+  const close = () => { back.hidden = true; box.innerHTML = ''; modalCtx = null; opts.onClose && opts.onClose(); requestAnimationFrame(() => { if (back.hidden && previousFocus?.isConnected) previousFocus.focus(); }); };
   const rerender = () => { box.querySelector('.modal-body').innerHTML = opts.render(box); };
   box.innerHTML = `
-    <div class="modal-head"><h2>${opts.title}</h2>${opts.desc ? `<p>${opts.desc}</p>` : ''}</div>
+    <div class="modal-head"><h2 id="modal-title">${opts.title}</h2>${opts.desc ? `<p>${opts.desc}</p>` : ''}</div>
     <div class="modal-body">${opts.render(box)}</div>
     <div class="modal-foot">${opts.buttons.map((b, i) => `<button class="btn${b.primary ? ' primary' : ''}${b.danger ? ' danger solid' : ''}" data-mb="${i}">${b.label}</button>`).join('')}</div>`;
   back.hidden = false;
-  modalCtx = { close, opts };
+  modalCtx = { close, opts, previousFocus };
   box.onclick = e => {
     const b = e.target.closest('[data-mb]');
     if (!b) { if (opts.onClick) opts.onClick(e, box, close, rerender); return; }
@@ -3048,8 +3052,11 @@ function showModal(opts) {
     if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'checkbox' && e.target.type !== 'radio' && opts.onOk) { e.preventDefault(); opts.onOk(close, box); }
   };
   const f = box.querySelector('[autofocus], .modal-body input:not([type=checkbox]):not([type=radio])');
-  if (f) setTimeout(() => f.focus(), 30);
-  else setTimeout(() => box.querySelector('.btn.primary')?.focus(), 30);
+  setTimeout(() => {
+    if (modalCtx?.opts !== opts || back.hidden) return;
+    if (f?.isConnected) f.focus();
+    else (box.querySelector('.btn.primary, .modal-foot .btn') || box).focus();
+  }, 30);
 }
 
 function confirmDialog(title, message, okLabel = 'OK', danger = false) {
@@ -3072,9 +3079,10 @@ function reattach(ctx) {
   // Re-bind a dialog that was temporarily covered by a confirmation.
   const box = $('#modal-box'), back = $('#modal');
   const opts = ctx.opts;
-  const close = () => { back.hidden = true; box.innerHTML = ''; modalCtx = null; opts.onClose && opts.onClose(); };
+  const previousFocus = ctx.previousFocus;
+  const close = () => { back.hidden = true; box.innerHTML = ''; modalCtx = null; opts.onClose && opts.onClose(); requestAnimationFrame(() => { if (back.hidden && previousFocus?.isConnected) previousFocus.focus(); }); };
   const rerender = () => { box.querySelector('.modal-body').innerHTML = opts.render(box); };
-  modalCtx = { close, opts };
+  modalCtx = { close, opts, previousFocus };
   box.onclick = e => {
     const b = e.target.closest('[data-mb]');
     if (!b) { if (opts.onClick) opts.onClick(e, box, close, rerender); return; }
@@ -3083,6 +3091,10 @@ function reattach(ctx) {
   };
   box.onchange = e => opts.onChange && opts.onChange(e, rerender, box);
   box.oninput = e => opts.onInput && opts.onInput(e, box);
+  box.onkeydown = e => {
+    if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'checkbox' && e.target.type !== 'radio' && opts.onOk) { e.preventDefault(); opts.onOk(close, box); }
+  };
+  requestAnimationFrame(() => box.querySelector('input, select, button')?.focus());
 }
 
 function promptDialog(title, label, value = '') {
@@ -3132,6 +3144,7 @@ function renderAll() {
   $('#btn-regroup').disabled = !state.data.clients.some(hasLoc);
   $('#btn-export').disabled = !state.data.clients.length;
   const lb = S().lastBackupAt;
+  window.DesktopUI?.refresh();
   $('#menu [data-act="backup"]').innerHTML = `Save a backup…${lb ? `<small>last: ${esc(fmtAgo(daysSince(lb)).toLowerCase())}</small>` : ''}`;
 }
 
