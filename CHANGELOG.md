@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.9.1 — 2026-11-04
+
+### Improved
+
+- Code reorganised into smaller modules: the interface is split into one script per area (map, lists, day planner, client details, Google pages, import, export, backups…) and the main process into `src/main/` (files, geocoding, Google pages, backups).
+- Duplicate code removed: one shared distance calculation and text normaliser, and unused helpers dropped.
+
+### Compatibility and validation
+
+- No change to features, data, file formats or backups. No data migration is required.
+- Windows packages still use Electron 44.10.1, so the update ZIP works on 1.9.0 folder installations.
+- Validation: 12 core/main-process tests, the Electron smoke and UI suites, and a launch of the packaged app with demo data on an isolated profile.
+
 ## 1.9.0 — 2026-11-03
 
 ### Added

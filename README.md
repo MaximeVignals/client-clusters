@@ -5,7 +5,7 @@
 Client Clusters is a Windows desktop app for planning client rounds. Import your list, see clients on a map,
 group nearby stops, plan visits around opening hours, and keep a record of every visit and call.
 
-**[Download v1.9.0 for Windows](https://github.com/MaximeVignals/client-clusters/releases/tag/v1.9.0)** ·
+**[Download v1.9.1 for Windows](https://github.com/MaximeVignals/client-clusters/releases/tag/v1.9.1)** ·
 [What's new](CHANGELOG.md) · [Getting started](#download-and-install) · [Usage guide](#using-it)
 
 ![Client Clusters 1.9 in light mode with fictional demo clients around Lyon](docs/screenshot.png)
@@ -30,20 +30,20 @@ group nearby stops, plan visits around opening hours, and keep a record of every
 
 ### First installation
 
-1. Download **[ClientClusters-1.9.0-win-x64.7z](https://github.com/MaximeVignals/client-clusters/releases/download/v1.9.0/ClientClusters-1.9.0-win-x64.7z)** from the release.
+1. Download **[ClientClusters-1.9.1-win-x64.7z](https://github.com/MaximeVignals/client-clusters/releases/download/v1.9.1/ClientClusters-1.9.1-win-x64.7z)** from the release.
 2. Extract the entire archive to a folder. Windows 11 can extract `.7z` files directly.
 3. Open **Client Clusters.exe** inside the extracted folder. Keep the accompanying files and folders together.
 4. Choose **Try with demo data** to explore using fictional clients, or import your own list.
 
 ### Update an existing folder installation
 
-Download the smaller **[ClientClusters-1.9.0-update.zip](https://github.com/MaximeVignals/client-clusters/releases/download/v1.9.0/ClientClusters-1.9.0-update.zip)**
+Download the smaller **[ClientClusters-1.9.1-update.zip](https://github.com/MaximeVignals/client-clusters/releases/download/v1.9.1/ClientClusters-1.9.1-update.zip)**
 and drop it onto **Update Client Clusters.bat** in your app folder. The updater checks the package hash and
 Electron version, keeps the previous app file, and restarts the app. This release uses Electron **44.10.1**;
 if your installation uses a different version or is an older standalone executable, use the full archive instead.
 
 Clients, visits, groups, settings and backups remain in the existing data folder. The interface redesign requires no data migration.
-See the [v1.9.0 changelog](CHANGELOG.md#190--2026-11-03) for the full list of improvements.
+See the [v1.9.1 changelog](CHANGELOG.md#191--2026-11-04) for the full list of improvements.
 
 ## Privacy and technology
 
