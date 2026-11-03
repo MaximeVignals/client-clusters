@@ -1,0 +1,29 @@
+# Dependencies and builds
+node_modules/
+dist/
+*.exe
+*.part*
+*.zip
+*.bat
+
+# Client data: never commit real lists, exports or backups
+*.xlsx
+*.xls
+*.xlsm
+*.ods
+*.csv
+*.kmz
+*.kml
+*.ccbackup
+clients*.json
+geocode-cache.json
+town-cache.json
+google.json
+backups/
+
+# Secrets and local files
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db

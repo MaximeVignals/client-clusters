@@ -1,0 +1,55 @@
+{
+  "name": "client-clusters",
+  "productName": "Client Clusters",
+  "version": "1.7.0",
+  "description": "Group clients into nearby clusters and track visits",
+  "main": "src/main.js",
+  "author": "Maxime Vignals <contact@maximevignals.fr>",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.clientclusters.app",
+    "productName": "Client Clusters",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "src/icon.ico",
+      "signAndEditExecutable": false,
+      "artifactName": "ClientClusters-${version}-win-x64.${ext}"
+    },
+    "portable": {
+      "artifactName": "ClientClusters-${version}-Portable.exe"
+    }
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "electron": "^44.10.1",
+    "electron-builder": "^26.18.1",
+    "leaflet": "^1.9.4"
+  }
+}
