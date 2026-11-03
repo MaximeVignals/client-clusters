@@ -3,6 +3,8 @@
 Desktop app (Windows) that reads a client list, places clients on a map, groups them by proximity
 (maximum group size adjustable, 6 by default) and keeps a log of visits.
 
+![Client Clusters with the built-in demo data: 43 fictional clients around Lyon in 8 groups](docs/screenshot.png)
+
 **Stack:** Electron (sandboxed renderer, context isolation, strict CSP), vanilla JavaScript, Leaflet,
 SheetJS, JSZip. Geocoding via IGN Géoplateforme and OpenStreetMap Nominatim; optional Google Places API (New).
 
