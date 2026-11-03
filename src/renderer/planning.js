@@ -24,8 +24,7 @@
   function dayRanges(hours, weekday) {
     const H = Hours();
     if (!H || !H.known(hours)) return null;
-    const line = H.weekLines(hours).find(l => l.day === weekday);
-    return line ? line.ranges : null;
+    return H.dayRanges(hours, weekday);
   }
   const closedAllDay = (hours, weekday) => { const r = dayRanges(hours, weekday); return !!r && r.length === 0; };
 
@@ -186,9 +185,9 @@
       if (!best) break;
       tried.add(best);
       const trial = chosen.concat(best);
-      const o = orderStops(opts.home, trial, { ...opts, weekday: undefined }); // quick check on distance only
+      const o = orderStops(opts.home, trial, opts);
       const sim = simulate(opts.home, o.map(i => trial[i]), opts);
-      if (sim.endMin > endMin && chosen.length) continue; // doesn't fit in the day
+      if (sim.endMin > endMin) continue; // doesn't fit in the day, including the first stop
       chosen.push(best);
     }
     const order = orderStops(opts.home, chosen, opts);
@@ -228,7 +227,7 @@
 
   const fmtMin = m => { m = Math.round(m); return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
   const fmtDuration = m => { m = Math.round(m); const h = Math.floor(m / 60), r = m % 60; return h ? `${h} h${r ? ' ' + String(r).padStart(2, '0') : ''}` : `${r} min`; };
-  const parseHHMM = s => { const m = /^(\d{1,2})[:h](\d{2})$/.exec(String(s || '').trim()); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+  const parseHHMM = s => { const m = /^(\d{1,2})[:h](\d{2})$/.exec(String(s || '').trim()); return m && +m[1] < 24 && +m[2] < 60 ? (+m[1]) * 60 + (+m[2]) : null; };
 
   const api = { distanceKm, roadKm, dayRanges, closedAllDay, checkArrival, simulate, orderStops, insertionKm, planDay, routeLinks, fmtMin, fmtDuration, parseHHMM, ROAD_FACTOR };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

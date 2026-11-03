@@ -33,3 +33,8 @@ Thumbs.db
 .mcp.json
 CLAUDE.md
 CLAUDE.local.md
+
+# Build helpers that are part of the project
+!build/*.bat
+build/electron-version.txt
+.test-tmp/

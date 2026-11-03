@@ -34,6 +34,28 @@
   const known = hours => !!(hours && Array.isArray(hours.periods) && hours.periods.length);
   const always = iv => iv.length === 1 && iv[0][0] === 0 && iv[0][1] >= WEEK;
 
+  // Openings that overlap a weekday, including carry-over from the previous night.
+  // Keep an end beyond midnight so a visit starting late can still fit before closing.
+  function dayRanges(hours, weekday) {
+    if (!known(hours)) return null;
+    const iv = intervals(hours);
+    if (always(iv)) return [[0, 1440 * 2]];
+    const start = weekday * 1440, ranges = [];
+    for (const [s, e] of iv) for (const shift of [-WEEK, 0]) {
+      if (s + shift < start + 1440 && e + shift > start) {
+        ranges.push([Math.max(0, s + shift - start), e + shift - start]);
+      }
+    }
+    ranges.sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    for (const range of ranges) {
+      const last = merged[merged.length - 1];
+      if (last && range[0] <= last[1]) last[1] = Math.max(last[1], range[1]);
+      else merged.push(range);
+    }
+    return merged;
+  }
+
   // When does the opening that contains minute t end? Follows openings that start right as the previous one ends.
   function openUntil(iv, t) {
     for (const shift of [0, -WEEK]) {
@@ -226,7 +248,7 @@
     return { match, candidates: scored };
   }
 
-  const api = { status, short, weekLines, weekText, parseDay, parseWeek, toLines, known, nameSimilarity, judge, DAY_NAMES };
+  const api = { status, short, weekLines, weekText, parseDay, parseWeek, toLines, dayRanges, known, nameSimilarity, judge, DAY_NAMES };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Hours = api;
 })(typeof window !== 'undefined' ? window : globalThis);

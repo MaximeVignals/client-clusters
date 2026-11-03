@@ -1,14 +1,16 @@
 {
   "name": "client-clusters",
   "productName": "Client Clusters",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Group clients into nearby clusters and track visits",
   "main": "src/main.js",
   "author": "Maxime Vignals <contact@maximevignals.fr>",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "dist:win": "electron-builder --win"
+    "test": "node --test test/*.test.cjs",
+    "test:smoke": "node test/run-smoke.cjs",
+    "dist:win": "node scripts/build-win.js"
   },
   "build": {
     "appId": "com.clientclusters.app",
@@ -23,13 +25,7 @@
     "win": {
       "target": [
         {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "zip",
+          "target": "7z",
           "arch": [
             "x64"
           ]
@@ -39,9 +35,23 @@
       "signAndEditExecutable": false,
       "artifactName": "ClientClusters-${version}-win-x64.${ext}"
     },
-    "portable": {
-      "artifactName": "ClientClusters-${version}-Portable.exe"
-    }
+    "extraResources": [
+      {
+        "from": "build/electron-version.txt",
+        "to": "electron-version.txt"
+      }
+    ],
+    "extraFiles": [
+      {
+        "from": "build/update.ps1",
+        "to": "update.ps1"
+      },
+      {
+        "from": "build/Update Client Clusters.bat",
+        "to": "Update Client Clusters.bat"
+      }
+    ],
+    "compression": "maximum"
   },
   "dependencies": {
     "jszip": "^3.10.1",

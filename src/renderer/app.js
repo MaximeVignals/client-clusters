@@ -170,19 +170,19 @@ function nextPlannedVisit(c) {
   return best;
 }
 const unconfirmedOf = c => plannedOf(c).filter(v => v.date < todayISO());
-const doneToday = c => (c.visits || []).some(v => v.date === todayISO() && vStatus(v) === 'done');
-const plannedToday = c => plannedOf(c).some(v => v.date === todayISO());
+const doneToday = c => (c.visits || []).some(v => v.date === todayISO() && countsAsVisit(v));
+const plannedToday = c => plannedOf(c).some(v => v.date === todayISO() && (v.type || 'visit') === 'visit');
 
 // Records a visit. A visit marked done on a day when one was planned confirms that planned visit.
 function recordVisit(c, { date, note = '', type = 'visit', outcome = '', status, order } = {}) {
   c.visits = c.visits || [];
   const st = status || (date > todayISO() ? 'planned' : 'done');
   if (st === 'done' && type === 'visit') { // a phone call doesn't confirm a planned visit
-    const p = c.visits.find(v => vStatus(v) === 'planned' && v.date === date);
+    const p = c.visits.find(v => vStatus(v) === 'planned' && v.date === date && (v.type || 'visit') === type);
     if (p) { Object.assign(p, { status: 'done', note: note || p.note || '', type, outcome, confirmedFrom: 'planned' }); return p; }
   }
   if (st === 'planned') {
-    const p = c.visits.find(v => vStatus(v) === 'planned' && v.date === date);
+    const p = c.visits.find(v => vStatus(v) === 'planned' && v.date === date && (v.type || 'visit') === type);
     if (p) { if (note) p.note = note; return p; }
   }
   const v = { id: uid(), date, note, type, outcome, status: st };
@@ -447,7 +447,8 @@ function renderMap() {
     if (line.length > 1) L.polyline(line, { color: '#0f6b62', weight: 3, opacity: 0.75, dashArray: '6 6', interactive: false }).addTo(routeLayer);
   }
 
-  if (!day) for (const info of state.derived.byGroup.values()) {
+  const prospecting = state.tab === 'prospecting';
+  if (!day && !prospecting) for (const info of state.derived.byGroup.values()) {
     const pts = info.members.filter(hasLoc).map(c => [c.lat, c.lng]);
     if (pts.length < 2) continue;
     const dim = selG && selG !== info.group.id;
@@ -467,7 +468,7 @@ function renderMap() {
     const st = clientStatus(c);
     const n = stopNo.get(c.id);
     const bg = n ? '#0f6b62' : colorBy === 'status' ? STATUS_COLORS[st] : groupColor(c);
-    const dim = (day && !n) || (selG && c.groupId !== selG) || (state.search && !matchesSearch(c));
+    const dim = prospecting || (day && !n) || (selG && c.groupId !== selG) || (state.search && !matchesSearch(c));
     const sel = c.id === state.selectedClientId;
     const np = nextPlannedVisit(c);
     const cls = ['pin', dim && 'dim', sel && 'sel', np && !n && 'has-plan', state.selection.has(c.id) && 'picked', n && 'stop'].filter(Boolean).join(' ');
@@ -500,6 +501,7 @@ function renderMap() {
     hm.on('click', e => L.DomEvent.stopPropagation(e));
     hm.addTo(markerLayer);
   }
+  if (typeof renderProspectLayer === 'function') renderProspectLayer();
 }
 
 function fitAll() {
@@ -596,6 +598,11 @@ map.on('click', e => {
 });
 
 function renderLegend() {
+  if (state.tab === 'prospecting') {
+    $('#legend').innerHTML = prospectLegend();
+    $('#legend').hidden = !state.data.prospecting;
+    return;
+  }
   const by = S().colorBy;
   let keys;
   const tiers = state.data.clients.some(c => c.tier);
@@ -652,12 +659,13 @@ const SORTS = {
   groups: [['number', 'Group number'], ['urgent', 'Most overdue first'], ['name', 'Name']],
   clients: [['name', 'Name A–Z'], ['urgent', 'Most overdue first'], ['planned', 'Next planned visit'], ['group', 'Group'], ['city', 'City']],
   planned: [],
+  prospecting: [],
 };
-const TAB_LABELS = { groups: 'Groups', clients: 'Clients', planned: 'Planned' };
+const TAB_LABELS = { groups: 'Groups', clients: 'Clients', planned: 'Planned', prospecting: 'Prospects' };
 function renderTabs() {
   document.querySelectorAll('.tab').forEach(t => {
     const k = t.dataset.tab;
-    const n = k === 'groups' ? state.data.groups.length : k === 'clients' ? state.data.clients.length : state.derived.upcoming;
+    const n = k === 'groups' ? state.data.groups.length : k === 'clients' ? state.data.clients.length : k === 'prospecting' ? (state.data.prospecting?.prospects.length || 0) : state.derived.upcoming;
     const warn = k === 'planned' && state.derived.unconfirmed.length;
     t.classList.toggle('active', k === state.tab);
     t.innerHTML = `${TAB_LABELS[k]}<span class="count">${n}</span>${warn ? `<span class="dot-warn" title="${warn} planned visit${warn > 1 ? 's' : ''} not confirmed"></span>` : ''}`;
@@ -669,6 +677,7 @@ function renderTabs() {
 
 function renderBanners() {
   const d = state.derived, out = [];
+  if (state.tab === 'prospecting') { $('#banners').innerHTML = ''; return; }
   if (d.unconfirmed.length && state.tab !== 'planned') {
     const n = d.unconfirmed.length;
     out.push(`<div class="banner">${n} planned visit${n > 1 ? 's have' : ' has'} passed without being confirmed. Did ${n > 1 ? 'they' : 'it'} happen?<div class="acts"><button class="btn small primary" data-b="unconfirmed">Review</button></div></div>`);
@@ -818,11 +827,12 @@ function renderClientsList() {
 
 function renderList() {
   const scroll = $('#list').scrollTop;
-  $('#list').innerHTML = state.tab === 'groups' ? renderGroupsList() : state.tab === 'planned' ? renderPlannedList() : renderClientsList();
+  $('#list').innerHTML = state.tab === 'groups' ? renderGroupsList() : state.tab === 'planned' ? renderPlannedList() : state.tab === 'prospecting' ? renderProspectingList() : renderClientsList();
   $('#list').scrollTop = scroll;
 }
 
 $('#list').addEventListener('click', e => {
+  if (state.tab === 'prospecting') return; // handled in prospecting.js
   if (state.tab === 'planned' && plannedListClick(e)) return;
   const tick = e.target.closest('[data-tick]');
   if (tick) { e.stopPropagation(); toggleVisitedToday(tick.dataset.tick); return; }
@@ -853,7 +863,9 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
   const was = state.tab;
   state.tab = t.dataset.tab;
   if (state.tab === 'groups') state.clientFilter = null;
+  if (state.tab === 'prospecting') { state.selectedClientId = null; renderDetail(); }
   renderAll();
+  if (state.tab === 'prospecting' && was !== 'prospecting') fitProspects();
   if (state.tab === 'planned' && was !== 'planned' && state.selectedDay) fitDay(state.selectedDay);
 }));
 $('#sort').addEventListener('change', e => { state.sort[state.tab] = e.target.value; renderList(); });
@@ -1384,7 +1396,7 @@ function toggleVisitedToday(id) {
   const c = clientById(id);
   if (!c) return;
   const t = todayISO();
-  const todays = (c.visits || []).filter(v => v.date === t && vStatus(v) === 'done');
+  const todays = (c.visits || []).filter(v => v.date === t && countsAsVisit(v));
   if (todays.length) {
     const last = todays[todays.length - 1];
     undoDone(c, last);
@@ -2805,11 +2817,13 @@ $('#menu').addEventListener('click', async e => {
 function backupDialog() {
   const hasKey = state.googleKey.hasKey;
   const visits = state.data.clients.reduce((n, c) => n + (c.visits || []).length, 0);
+  const pros = state.data.prospecting;
   showModal({
     title: 'Save a backup',
     desc: 'One file with everything: clients, visits, groups, opening hours, settings and home address. Copy it to the other computer (USB key, OneDrive, e-mail…) and open it there with <b>… → Restore a backup…</b>',
     render: () => `
       <p style="margin:0 0 10px"><b>${state.data.clients.length}</b> clients · <b>${visits}</b> visits · <b>${state.data.groups.length}</b> groups${S().lastBackupAt ? ` · last backup ${fmtDate(S().lastBackupAt)}` : ''}</p>
+      ${pros ? `<label class="check" style="margin-bottom:8px"><input type="checkbox" id="b-pros" checked> Include my prospecting map (${pros.prospects.length} prospect${pros.prospects.length === 1 ? '' : 's'}${pros.areas.length ? `, ${pros.areas.length} area${pros.areas.length === 1 ? '' : 's'}` : ''})</label>` : ''}
       ${hasKey ? `
         <label class="check"><input type="checkbox" id="b-key"> Include my Google API key, protected by a password</label>
         <div id="b-pass" class="field-row field" style="margin-top:8px;grid-template-columns:1fr 1fr" hidden>
@@ -2831,8 +2845,9 @@ function backupDialog() {
         if (pw !== box.querySelector('#b-p2').value) return err('The two passwords are different.');
       }
       flushSave();
+      const data = box.querySelector('#b-pros')?.checked === false ? { ...state.data, prospecting: undefined } : state.data;
       let r;
-      try { r = await window.api.saveBackup({ data: state.data, includeKey: withKey, password: pw }); } catch (e) { return err('The backup could not be saved: ' + e.message); }
+      try { r = await window.api.saveBackup({ data, includeKey: withKey, password: pw }); } catch (e) { return err('The backup could not be saved: ' + e.message); }
       if (!r) return; // save dialog cancelled
       close();
       S().lastBackupAt = todayISO(); save(); renderAll();
@@ -2863,13 +2878,14 @@ function mergeBackup(incoming) {
     }
     let changed = false;
     normalizeVisits(ex); normalizeVisits(inc);
-    const ids = new Set(ex.visits.map(v => v.id)), same = new Set(ex.visits.map(v => v.date + '|' + (v.note || '')));
+    const visitKey = v => JSON.stringify([v.date, v.note || '', v.type || 'visit', vStatus(v), v.outcome || '']);
+    const same = new Set(ex.visits.map(visitKey));
     for (const v of inc.visits) {
       const mine = ex.visits.find(x => x.id === v.id);
       // Same visit on both computers: a planned visit confirmed (or cancelled) on the other one is taken over.
       if (mine) { if (vStatus(mine) === 'planned' && vStatus(v) !== 'planned') { Object.assign(mine, v); changed = true; } continue; }
-      if (same.has(v.date + '|' + (v.note || ''))) continue;
-      ex.visits.push(v); ids.add(v.id); same.add(v.date + '|' + (v.note || '')); res.visits++; changed = true;
+      if (same.has(visitKey(v))) continue;
+      ex.visits.push(v); same.add(visitKey(v)); res.visits++; changed = true;
     }
     if (!ex.tier && inc.tier) { ex.tier = inc.tier; changed = true; }
     const n = (inc.notes || '').trim();
@@ -2890,7 +2906,8 @@ async function restoreBackup() {
   if (!b) return;
   const m = b.manifest || {};
   const localCount = state.data.demo ? 0 : state.data.clients.length;
-  const st = { mode: localCount ? 'merge' : 'replace', password: '' };
+  const st = { mode: localCount ? 'merge' : 'replace', password: '', prospects: !!b.data.prospecting };
+  const localPros = state.data.prospecting?.prospects.length || 0;
   const when = m.createdAt ? new Date(m.createdAt) : null;
   const newer = m.appVersion && b.thisAppVersion && m.appVersion.localeCompare(b.thisAppVersion, undefined, { numeric: true }) > 0;
   showModal({
@@ -2899,7 +2916,7 @@ async function restoreBackup() {
     render: () => `
       <dl class="extra backup-sum">
         <dt>Saved</dt><dd>${when ? esc(when.toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' })) : '—'}${m.computer ? ` on <b>${esc(m.computer)}</b>` : ''}</dd>
-        <dt>Contains</dt><dd>${m.clients} clients · ${m.visits} visits · ${m.groups} groups</dd>
+        <dt>Contains</dt><dd>${m.clients} clients · ${m.visits} visits · ${m.groups} groups${m.prospects ? ` · ${m.prospects} prospects` : ''}</dd>
         ${m.format === 0 ? '<dt>Note</dt><dd>Backup from an older version: clients, visits, groups and settings (no Google key).</dd>' : ''}
       </dl>
       ${newer ? `<p class="note bad">This backup comes from a newer version of the app (${esc(m.appVersion)}). Update this computer first if anything looks wrong.</p>` : ''}
@@ -2909,13 +2926,17 @@ async function restoreBackup() {
             <label><input type="radio" name="rmode" value="merge"${st.mode === 'merge' ? ' checked' : ''}><span><b>Combine</b> — add the backup's clients and visits to the ones here. Nothing is removed; clients found on both are joined and keep the visits of both.</span></label>
             <label><input type="radio" name="rmode" value="replace"${st.mode === 'replace' ? ' checked' : ''}><span><b>Replace</b> — this computer gets exactly the backup's data (clients, visits, groups and settings). What is here now is removed.</span></label>
           </div></div>` : ''}
+      ${b.data.prospecting ? `<label class="check" style="margin-top:12px"><input type="checkbox" id="r-pros"${st.prospects ? ' checked' : ''}> Restore the prospecting map${localPros ? ` (with Combine, joined with the ${localPros} prospects here; with Replace, replaces them)` : ''}</label>` : ''}
       ${b.hasKey ? `
         <div class="field" style="margin-top:12px"><label for="r-pass">The backup includes a Google API key — its password</label>
           <input type="password" id="r-pass" placeholder="Leave empty to skip the key" autocomplete="off"></div>` : ''}
       <p class="note">A copy of the data on this computer is kept in the backups folder (… → Open data folder) before anything changes.</p>
       <div class="err" id="r-err"></div>`,
     buttons: [{ label: 'Cancel', action: 'close' }, { label: 'Restore', primary: true, action: 'ok' }],
-    onChange(e) { if (e.target.name === 'rmode') st.mode = e.target.value; },
+    onChange(e) {
+      if (e.target.name === 'rmode') st.mode = e.target.value;
+      if (e.target.id === 'r-pros') st.prospects = e.target.checked;
+    },
     async onOk(close, box) {
       const err = t => { box.querySelector('#r-err').textContent = t; };
       const pw = box.querySelector('#r-pass')?.value || '';
@@ -2927,10 +2948,12 @@ async function restoreBackup() {
       close();
       let msg;
       if (st.mode === 'replace') {
-        loadData(b.data);
+        const keepPros = state.data.prospecting;
+        loadData(st.prospects ? b.data : { ...b.data, prospecting: keepPros });
         msg = `Backup restored: ${state.data.clients.length} clients and their visits.`;
       } else {
         const r = mergeBackup(b.data);
+        if (st.prospects) mergeProspecting(b.data.prospecting);
         if (state.data.groups.length) assignToNearest(r.newClients.filter(c => hasLoc(c) && !c.groupId), { quiet: true });
         else if (state.data.clients.some(hasLoc)) await regroup({ confirm: false });
         state.selectedClientId = null; state.selectedGroupId = null;
@@ -3105,7 +3128,7 @@ function renderAll() {
   derive();
   setTimeout(fillMissingTowns, 0);
   renderStats(); renderTabs(); renderBanners(); renderList(); renderMap(); renderLegend(); renderSelectBar();
-  $('#empty').hidden = state.data.clients.length > 0;
+  $('#empty').hidden = state.data.clients.length > 0 || state.tab === 'prospecting';
   $('#btn-regroup').disabled = !state.data.clients.some(hasLoc);
   $('#btn-export').disabled = !state.data.clients.length;
   const lb = S().lastBackupAt;
@@ -3120,6 +3143,8 @@ function loadData(data) {
     settings,
     clients: (data.clients || []).map(c => normalizeVisits({ visits: [], extra: {}, notes: '', address: '', postcode: '', city: '', country: '', tier: '', ...c })),
     groups: data.groups || [],
+    // prospecting.js loads after this file; keep the data as is if it failed to load.
+    prospecting: typeof normalizeProspecting === 'function' ? normalizeProspecting(data.prospecting) : data.prospecting,
   };
   state.selectedClientId = null; state.selectedGroupId = null; state.selectedDay = null; state.selection.clear();
   renderAll(); renderDetail();

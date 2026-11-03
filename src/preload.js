@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   unlockBackupKey: password => ipcRenderer.invoke('backup:unlockKey', password),
   applyBackup: opts => ipcRenderer.invoke('backup:apply', opts),
   openImportFile: () => ipcRenderer.invoke('import:open'),
+  openProspectFile: () => ipcRenderer.invoke('prospect:open'),
   exportXlsx: payload => ipcRenderer.invoke('export:xlsx', payload),
   exportKmz: payload => ipcRenderer.invoke('export:kmz', payload),
   geocode: req => ipcRenderer.invoke('geo:geocode', req),

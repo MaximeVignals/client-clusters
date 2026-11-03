@@ -164,19 +164,27 @@ function cellToString(v) {
   return String(v).trim();
 }
 
-ipcMain.handle('import:open', async () => {
+async function openTableOrMap(title, filter) {
   const r = await dialog.showOpenDialog(win, {
-    title: 'Choose your client list',
-    filters: [
-      { name: 'Excel, CSV or Google Earth (KMZ/KML)', extensions: ['xlsx', 'xlsm', 'xls', 'ods', 'csv', 'txt', 'kmz', 'kml'] },
-      { name: 'All files', extensions: ['*'] },
-    ],
+    title,
+    filters: [filter, { name: 'All files', extensions: ['*'] }],
     properties: ['openFile'],
   });
   if (r.canceled || !r.filePaths.length) return null;
-  const file = r.filePaths[0];
+  return readTableOrMap(r.filePaths[0]);
+}
+
+ipcMain.handle('import:open', () => openTableOrMap('Choose your client list',
+  { name: 'Excel, CSV or Google Earth (KMZ/KML)', extensions: ['xlsx', 'xlsm', 'xls', 'ods', 'csv', 'txt', 'kmz', 'kml'] }));
+
+// Prospecting map: same formats, plus GeoJSON (parsed in the window).
+ipcMain.handle('prospect:open', () => openTableOrMap('Choose your prospecting file',
+  { name: 'Excel, CSV, KMZ/KML or GeoJSON', extensions: ['xlsx', 'xlsm', 'xls', 'ods', 'csv', 'txt', 'kmz', 'kml', 'geojson', 'json'] }));
+
+async function readTableOrMap(file) {
   const ext = path.extname(file).toLowerCase();
   const buf = fs.readFileSync(file);
+  if (ext === '.geojson' || ext === '.json') return { fileName: path.basename(file), geojson: decodeText(buf) };
   // KMZ = zipped KML. The KML (XML) is parsed in the window, which has an XML parser.
   if (ext === '.kml') return { fileName: path.basename(file), kml: decodeText(buf) };
   if (ext === '.kmz' || (buf[0] === 0x50 && buf[1] === 0x4b && !/\.(xlsx|xlsm|ods)$/.test(ext))) {
@@ -201,7 +209,7 @@ ipcMain.handle('import:open', async () => {
     .map(s => ({ name: s.name, rows: s.rows.filter(row => row.some(c => String(c).trim() !== '')) }))
     .filter(s => s.rows.length > 0);
   return { fileName: path.basename(file), sheets };
-});
+}
 
 // ---------- Export ----------
 ipcMain.handle('export:kmz', async (_e, { kml, defaultName }) => {
@@ -279,12 +287,21 @@ async function geocodeIGN(q, postcode) {
 }
 
 let lastNominatim = 0;
+let nominatimQueue = Promise.resolve();
+function nominatimJson(url) {
+  const request = nominatimQueue.then(async () => {
+    const wait = lastNominatim + 1100 - Date.now();
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    lastNominatim = Date.now();
+    return getJson(url);
+  });
+  // A failed request must not block subsequent forward or reverse lookups.
+  nominatimQueue = request.catch(() => {});
+  return request;
+}
 async function geocodeNominatim(q) {
-  const wait = lastNominatim + 1100 - Date.now();
-  if (wait > 0) await new Promise(r => setTimeout(r, wait));
-  lastNominatim = Date.now();
   const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&q=' + encodeURIComponent(q);
-  const j = await getJson(url);
+  const j = await nominatimJson(url);
   if (!Array.isArray(j) || !j[0]) return null;
   return {
     lat: parseFloat(j[0].lat), lng: parseFloat(j[0].lon), label: j[0].display_name,
@@ -321,10 +338,7 @@ ipcMain.handle('geo:town', async (_e, { lat, lng }) => {
   } catch { /* try the next service */ }
   if (!out) {
     try {
-      const wait = lastNominatim + 1100 - Date.now();
-      if (wait > 0) await new Promise(r => setTimeout(r, wait));
-      lastNominatim = Date.now();
-      const j = await getJson(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&lat=${lat}&lon=${lng}`);
+      const j = await nominatimJson(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&lat=${lat}&lon=${lng}`);
       if (j && j.address && townOf(j.address)) out = { city: townOf(j.address), postcode: j.address.postcode || '' };
     } catch (e) { return { error: e.message }; }
   }
@@ -554,11 +568,16 @@ ipcMain.handle('backup:save', async (_e, { data, includeKey, password }) => {
   if (r.canceled || !r.filePath) return null;
   const zip = new JSZip();
   const key = includeKey ? loadGoogleKey() : '';
+  // The prospecting map is an optional part, in its own file.
+  const { prospecting, ...rest } = data;
+  data = rest;
   zip.file('manifest.json', JSON.stringify({
     app: 'Client Clusters', format: 1, appVersion: app.getVersion(), createdAt: new Date().toISOString(),
     clients: data.clients.length, visits: countVisits(data), groups: (data.groups || []).length, googleKey: !!(key && password),
+    prospects: prospecting ? (prospecting.prospects || []).length : 0,
   }, null, 1));
   zip.file('data.json', JSON.stringify(data));
+  if (prospecting) zip.file('prospecting.json', JSON.stringify(prospecting));
   zip.file('geocode-cache.json', JSON.stringify(loadCache()));
   zip.file('town-cache.json', JSON.stringify(loadRevCache()));
   if (key && password) zip.file('google-key.json', JSON.stringify(encryptWithPassword(key, password)));
@@ -585,6 +604,8 @@ async function readBackupFile(file) {
     out.geocode = await get('geocode-cache.json');
     out.towns = await get('town-cache.json');
     out.keyBlob = await get('google-key.json');
+    const pros = await get('prospecting.json');
+    if (out.data && pros) out.data.prospecting = pros;
   } else {
     // Older backups: just the data, as JSON.
     let text = buf.toString('utf8').replace(/^﻿/, '');
@@ -593,7 +614,8 @@ async function readBackupFile(file) {
     out.manifest = { app: 'Client Clusters', format: 0, createdAt: st.mtime.toISOString(), computer: '', appVersion: '' };
   }
   if (!out.data || !Array.isArray(out.data.clients)) throw new Error('This file is not a Client Clusters backup.');
-  out.manifest = { ...out.manifest, clients: out.data.clients.length, visits: countVisits(out.data), groups: (out.data.groups || []).length };
+  out.manifest = { ...out.manifest, clients: out.data.clients.length, visits: countVisits(out.data), groups: (out.data.groups || []).length,
+    prospects: out.data.prospecting ? (out.data.prospecting.prospects || []).length : 0 };
   return out;
 }
 
@@ -621,7 +643,7 @@ ipcMain.handle('backup:apply', (_e, { current }) => {
   // 1) Safety copy of what this PC had, kept in the backups folder.
   let safety = null;
   try {
-    if (current && Array.isArray(current.clients) && current.clients.length) {
+    if (current && ((Array.isArray(current.clients) && current.clients.length) || current.prospecting?.prospects?.length)) {
       const d = new Date(), p = n => String(n).padStart(2, '0');
       safety = path.join(backupDir(), `before-restore-${stamp()}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.json`);
       fs.writeFileSync(safety, JSON.stringify(current, null, 1), 'utf8');

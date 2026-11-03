@@ -103,7 +103,9 @@ Requires Node.js 20+.
 ```
 npm install
 npm start          # run the app
-npm run dist:win   # build dist/ClientClusters-<version>-Portable.exe and a .zip
+npm test          # run core and main-process regression tests (no network)
+npm run test:smoke # run the sandboxed Electron renderer with isolated demo data (no network)
+npm run dist:win   # build the full Windows .7z install and an update-only .zip
 ```
 
 Code: `src/main.js` (files, import/export, geocoding), `src/renderer/app.js` (interface),

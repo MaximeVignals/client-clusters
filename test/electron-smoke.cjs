@@ -1,0 +1,110 @@
+// Runs the real sandboxed renderer and preload with isolated data and offline IPC fixtures.
+const { app, BrowserWindow, ipcMain, session } = require('electron');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const profile = process.env.CLIENT_CLUSTERS_TEST_PROFILE;
+if (!profile || path.dirname(profile) !== path.resolve(__dirname, '../.test-tmp')) throw new Error('Run via test/run-smoke.cjs');
+app.setPath('userData', profile);
+app.disableHardwareAcceleration();
+let saved;
+let failed = 0;
+const errors = [];
+ipcMain.handle('data:load', () => null);
+ipcMain.handle('data:save', (_e, data) => { saved = data; return true; });
+ipcMain.handle('google:keyStatus', () => ({ hasKey: false, masked: '' }));
+ipcMain.handle('geo:town', () => ({ city: 'Test town', postcode: '69001' }));
+ipcMain.handle('geo:geocode', () => ({ lat: 45.76, lng: 4.84, city: 'Lyon', score: 1 }));
+
+app.whenReady().then(async () => {
+  // Avoid network access and tile failures while exercising Leaflet and the actual page.
+  session.defaultSession.protocol.handle('https', () => new Response(Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
+    { headers: { 'content-type': 'image/png' } }));
+  const win = new BrowserWindow({ show: false, width: 1400, height: 880,
+    webPreferences: { preload: path.resolve(__dirname, '../src/preload.js'), sandbox: true, contextIsolation: true, nodeIntegration: false } });
+  win.webContents.on('console-message', (_event, details) => {
+    if (details.level === 'error') errors.push(details.message);
+  });
+  await win.loadFile(path.resolve(__dirname, '../src/renderer/index.html'));
+  const js = code => win.webContents.executeJavaScript(code);
+  async function check(name, code) {
+    try {
+      const result = await js(`(async () => { const check = (ok, message) => { if (!ok) throw new Error(message); }; ${code} return true; })()`);
+      assert.equal(result, true);
+      console.log(`PASS ${name}`);
+    } catch (error) { failed++; console.error(`FAIL ${name}: ${error.message}`); }
+  }
+  await check('empty startup', `
+    for (let i = 0; i < 100 && !state.derived; i++) await new Promise(r => setTimeout(r, 20));
+    check(state.derived && state.data.clients.length === 0, 'startup did not finish');
+    check(!$('#empty').hidden, 'empty state missing');
+  `);
+  await check('demo, clustering, tabs, details and planning dialog', `
+    loadDemo();
+    for (let i = 0; i < 100 && !state.data.groups.length; i++) await new Promise(r => setTimeout(r, 20));
+    check(state.data.clients.length === 43 && state.data.groups.length > 0, 'demo failed');
+    for (const tab of document.querySelectorAll('.tab')) tab.click();
+    state.tab = 'clients'; renderAll(); selectClient(state.data.clients[0].id);
+    check(!$('#detail').hidden && $('#detail [data-f="name"]').value === state.data.clients[0].name, 'detail missing');
+    planDayDialog(); check(!$('#modal').hidden, 'planner missing'); modalCtx.close();
+    settingsDialog(); check(!$('#modal').hidden, 'settings missing'); modalCtx.close();
+  `);
+  await check('a planned call does not absorb a separate in-person visit', `
+    const c = { visits: [] }, date = addDaysISO(todayISO(), 1);
+    recordVisit(c, { date, status: 'planned', type: 'call' });
+    recordVisit(c, { date, status: 'planned', type: 'visit' });
+    check(c.visits.length === 2, 'planned visit was lost');
+    recordVisit(c, { date, status: 'done', type: 'visit' });
+    check(c.visits.find(v => v.type === 'call').status === 'planned', 'call was confirmed as a visit');
+    check(c.visits.find(v => v.type === 'visit').status === 'done', 'visit was not confirmed');
+  `);
+  await check('combining backups preserves calls and visits on the same day', `
+    loadData({ clients: [{ id: 'c', name: 'Client', visits: [{ id: 'v1', date: '2026-01-01', type: 'visit', status: 'done', note: '' }] }] });
+    mergeBackup({ clients: [{ id: 'c', name: 'Client', visits: [{ id: 'v2', date: '2026-01-01', type: 'call', status: 'done', note: '' }] }] });
+    check(state.data.clients[0].visits.length === 2, 'phone call was lost');
+    mergeBackup({ clients: [{ id: 'c', name: 'Client', visits: [{ id: 'v3', date: '2026-01-01', type: 'visit', status: 'done', note: '' }] }] });
+    check(state.data.clients[0].visits.length === 2, 'identical visit was duplicated');
+  `);
+  await check('marking visited today preserves phone calls and unsuccessful visits', `
+    loadData({ clients: [{ id: 'c', name: 'Client', visits: [
+      { id: 'call', date: todayISO(), type: 'call', status: 'done' },
+      { id: 'absent', date: todayISO(), type: 'visit', status: 'done', outcome: 'absent' }
+    ] }] });
+    const c = state.data.clients[0];
+    check(!doneToday(c), 'a call or unsuccessful visit counted as visited');
+    toggleVisitedToday(c.id);
+    check(doneToday(c) && c.visits.length === 3, 'today’s visit was not added');
+    toggleVisitedToday(c.id);
+    check(!doneToday(c) && c.visits.length === 2 && c.visits.some(v => v.id === 'call'), 'undo removed existing history');
+  `);
+  await check('prospect demo, grouping and GeoJSON/KML imports', `
+    loadProspectDemo(); groupProspects();
+    check(P().prospects.length === 25 && P().prospects.every(p => p.group), 'prospect demo failed');
+    const geo = readGeoJsonProspects(JSON.stringify({ type: 'Feature', properties: { name: 'Test' }, geometry: { type: 'Point', coordinates: [4, 45] } }));
+    check(geo.points.length === 1 && geo.points[0].lat === 45, 'GeoJSON point failed');
+    const kml = readKmlProspects('<kml xmlns="http://www.opengis.net/kml/2.2"><Placemark><name>Test</name><Point><coordinates>4,45,0</coordinates></Point></Placemark></kml>');
+    check(kml.points.length === 1 && kml.points[0].lng === 4, 'KML point failed');
+  `);
+  await check('combining prospects deduplicates incoming records', `
+    loadData({});
+    const area = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [[4, 45], [4.1, 45.1]] } };
+    mergeProspecting({ prospects: [{ id: 'p1', name: 'Same', address: 'A' }, { id: 'p2', name: 'Same', address: 'A', status: 'visited', statusAt: '2026-01-01' }], areas: [area, area] });
+    check(P().prospects.length === 1, 'duplicate prospect was added');
+    check(P().prospects[0].status === 'visited', 'latest status was lost');
+    check(P().areas.length === 1, 'duplicate area was added');
+  `);
+  await check('client import updates existing clients and preserves visit history', `
+    loadData({ clients: [{ id: 'c1', name: 'Test', address: 'A', postcode: '69001', city: 'Lyon', lat: 45, lng: 4,
+      visits: [{ id: 'visit', date: '2026-01-01', status: 'done', type: 'visit' }] }], groups: [{ id: 'g', number: 1, name: 'Lyon', color: '#2563eb' }] });
+    runImport({ headers: ['Name', 'Address', 'Postcode', 'City', 'Lat', 'Lng'], data: [['Test', 'A', '69001', 'Lyon', '45', '4']] },
+      { name: 0, address: 1, postcode: 2, city: 3, lat: 4, lng: 5 }, 'merge');
+    check(state.data.clients.length === 1 && state.data.clients[0].visits[0].id === 'visit', 'import lost history or duplicated client');
+    flushSave();
+  `);
+  await new Promise(r => setTimeout(r, 50));
+  if (!saved || saved.clients.length !== 1) { failed++; console.error('FAIL persistence IPC'); }
+  if (errors.length) { failed++; console.error('Renderer errors:', errors.join('\n')); }
+  console.log(`Smoke checks completed: ${failed} failure(s).`);
+  win.destroy();
+  app.exit(failed ? 1 : 0);
+}).catch(error => { console.error(error); app.exit(1); });
