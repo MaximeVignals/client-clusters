@@ -224,7 +224,7 @@ $('#detail').addEventListener('click', async e => {
       toast(`${c.name} located.`);
       if (!c.groupId && state.data.groups.length) { assignToNearest([c], { quiet: true }); save(); renderAll(); renderDetail(); }
       const m = markers.get(c.id); if (m) map.setView(m.getLatLng(), Math.max(map.getZoom(), 13));
-    } else toast(`Couldn't find this address. You can place the client on the map by hand.`, { error: true });
+    } else toast(hasLoc(c) ? "Couldn't find this address. The pin stays where it is." : "Couldn't find this address. You can place the client on the map by hand.", { error: true });
   }
   if (act === 'delete') {
     if (!(await confirmDialog('Delete this client?', `${esc(c.name)} and its ${c.visits?.length || 0} recorded visit(s) will be removed.`, 'Delete', true))) return;

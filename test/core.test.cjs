@@ -92,4 +92,6 @@ test('Google matching leaves ambiguous branches for review', () => {
   const places = [1, 2].map(id => ({ id, name: client.name, address: '12 rue Paul Bert 69003 Lyon' }));
   assert.equal(Hours.judge(client, places).match, null);
   assert.equal(Hours.judge(client, places.slice(0, 1)).match.id, 1);
+  // A postal code typed with stray punctuation must not break the search.
+  assert.equal(Hours.judge({ ...client, postcode: '69003 (' }, places.slice(0, 1)).candidates.length, 1);
 });

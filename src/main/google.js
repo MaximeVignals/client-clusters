@@ -148,8 +148,10 @@ ipcMain.handle('google:resolveLink', async (_e, link) => {
   if (!/^https?:\/\//i.test(u)) return { error: 'This is not a web link. Copy the link from Google Maps (Share → Copy link).' };
   let host = '';
   try { host = new URL(u).hostname; } catch { return { error: 'This link could not be read.' }; }
-  if (!/(^|\.)(google\.[a-z.]+|goo\.gl|g\.co|g\.page|share\.google)$/i.test(host)) return { error: 'This is not a Google Maps link.' };
-  if (/goo\.gl|g\.co|g\.page|share\.google/i.test(host)) {
+  // google.com, google.fr, google.co.uk, google.com.au… but not a look-alike such as google.example.com.
+  const SHORT_HOST = /(^|\.)(goo\.gl|g\.co|g\.page|share\.google)$/i;
+  if (!/(^|\.)google\.(com|[a-z]{2}|com?\.[a-z]{2})$/i.test(host) && !SHORT_HOST.test(host)) return { error: 'This is not a Google Maps link.' };
+  if (SHORT_HOST.test(host)) {
     // Short share link: follow it to the full Google Maps address.
     try {
       const res = await net.fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36' } });

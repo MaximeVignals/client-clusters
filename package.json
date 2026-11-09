@@ -1,7 +1,7 @@
 {
   "name": "client-clusters",
   "productName": "Client Clusters",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "description": "Group clients into nearby clusters and track visits",
   "main": "src/main.js",
   "author": "Maxime Vignals <contact@maximevignals.fr>",

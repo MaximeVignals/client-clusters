@@ -3,7 +3,7 @@ const { app } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-const APP_UA = 'ClientClusters/1.0 (desktop app; client visit planner)';
+const APP_UA = `ClientClusters/${app.getVersion()} (desktop app; client visit planner)`;
 const ui = { win: null }; // set once the window exists; used as the parent of file dialogs
 
 function dataDir() {
@@ -25,16 +25,20 @@ function writeAtomic(file, content) {
   fs.renameSync(tmp, file);
 }
 
+const DAILY_RE = /^clients-\d{4}-\d{2}-\d{2}\.json$/;
+
 // One backup per day, keep the 14 most recent.
 function dailyBackup() {
   try {
     if (!fs.existsSync(dataFile())) return;
+    // A damaged file must never be copied or push a good backup out of the 14.
+    try { JSON.parse(fs.readFileSync(dataFile(), 'utf8')); } catch { return; }
     const day = new Date().toISOString().slice(0, 10);
     const target = path.join(backupDir(), `clients-${day}.json`);
     if (!fs.existsSync(target)) fs.copyFileSync(dataFile(), target);
-    const files = fs.readdirSync(backupDir()).filter(f => /^clients-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
+    const files = fs.readdirSync(backupDir()).filter(f => DAILY_RE.test(f)).sort();
     while (files.length > 14) fs.unlinkSync(path.join(backupDir(), files.shift()));
   } catch (e) { console.error('Backup failed', e); }
 }
 
-module.exports = { APP_UA, ui, dataDir, dataFile, backupDir, writeAtomic, dailyBackup };
+module.exports = { APP_UA, ui, dataDir, dataFile, backupDir, writeAtomic, dailyBackup, DAILY_RE };

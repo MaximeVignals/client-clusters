@@ -10,6 +10,7 @@ const { APP_UA, dataDir, writeAtomic } = require('./paths');
 function jsonCache(fileName) {
   const file = () => path.join(dataDir(), fileName);
   let value = null, timer = null;
+  const write = () => { timer = null; try { writeAtomic(file(), JSON.stringify(value)); } catch (e) { console.error(e); } };
   return {
     get() {
       if (!value) { try { value = JSON.parse(fs.readFileSync(file(), 'utf8')); } catch { value = {}; } }
@@ -17,9 +18,10 @@ function jsonCache(fileName) {
     },
     saveSoon() {
       clearTimeout(timer);
-      timer = setTimeout(() => { try { writeAtomic(file(), JSON.stringify(value)); } catch (e) { console.error(e); } }, 1500);
+      timer = setTimeout(write, 1500);
     },
-    cancel() { clearTimeout(timer); },
+    flush() { if (timer) { clearTimeout(timer); write(); } }, // write now what was waiting (app closing)
+    cancel() { clearTimeout(timer); timer = null; },
   };
 }
 const geoCache = jsonCache('geocode-cache.json');

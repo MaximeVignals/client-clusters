@@ -111,7 +111,7 @@ async function openImport() {
   const st = { sheet: 0, header: true, mapping: null, mode: state.data.clients.length && !state.data.demo ? 'merge' : 'replace' };
   const sheetData = () => {
     const rows = file.sheets[st.sheet].rows;
-    const width = Math.max(...rows.map(r => r.length));
+    const width = rows.reduce((m, r) => Math.max(m, r.length), 0); // not Math.max(...): it fails on very long sheets
     const headers = st.header ? Array.from({ length: width }, (_, i) => String(rows[0][i] ?? '').trim() || `Column ${colLetter(i)}`) : Array.from({ length: width }, (_, i) => `Column ${colLetter(i)}`);
     return { headers, data: st.header ? rows.slice(1) : rows };
   };
@@ -255,6 +255,7 @@ function addClientDialog() {
       if (state.data.demo) { toast('Clear the demo data first (see the note in the sidebar).', { error: true }); return; }
       state.data.clients.push(c);
       close();
+      save(); // before the address search, which can take a while
       const ok = await geocodeOne(c);
       if (ok && state.data.groups.length) assignToNearest([c], { quiet: true });
       save();

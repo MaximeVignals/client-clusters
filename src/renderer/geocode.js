@@ -17,7 +17,9 @@ async function geocodeOne(c) {
     return true;
   }
   const notFound = !r || /not found/i.test(r.error || '');
-  if (notFound) { c.geo = { status: 'failed', label: '', score: 0 }; delete c.lat; delete c.lng; }
+  // A pin placed by hand or read from the file is kept when the address search finds nothing.
+  const ownPin = hasLoc(c) && (c.geo?.source === 'manual' || c.geo?.source === 'file');
+  if (notFound && !ownPin) { c.geo = { status: 'failed', label: '', score: 0 }; delete c.lat; delete c.lng; }
   return notFound ? false : null; // null = network problem, try again later
 }
 

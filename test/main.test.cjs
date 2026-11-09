@@ -41,6 +41,74 @@ test('CSV import preserves quotes, multiline fields and Windows encodings', t =>
   assert.equal(decodeText(Buffer.from([0x63, 0x61, 0x66, 0xe9])), 'café');
 });
 
+test('an unreadable data file is copied to the backups folder before anything can replace it', t => {
+  const { handlers, dir } = mainContext(t);
+  fs.writeFileSync(path.join(dir, 'clients.json'), '{"clients": [tru');
+  const result = handlers.get('data:load')();
+  assert.match(result.__error, /Could not read the data file/);
+  const kept = fs.readdirSync(path.join(dir, 'backups')).filter(f => f.startsWith('unreadable-'));
+  assert.equal(kept.length, 1);
+  assert.equal(fs.readFileSync(path.join(dir, 'backups', kept[0]), 'utf8'), '{"clients": [tru');
+});
+
+const writeBackup = (dir, name, content) => {
+  fs.mkdirSync(path.join(dir, 'backups'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'backups', name), typeof content === 'string' ? content : JSON.stringify(content));
+};
+
+test('a damaged data file lists the daily backups that can still be restored, newest first', t => {
+  const { handlers, dir } = mainContext(t);
+  fs.writeFileSync(path.join(dir, 'clients.json'), '{"clients": [tru');
+  writeBackup(dir, 'clients-2026-11-06.json', { clients: [{ id: 'a', visits: [{}, {}] }, { id: 'b' }] });
+  writeBackup(dir, 'clients-2026-11-08.json', { clients: [{ id: 'a', visits: [{}] }] });
+  writeBackup(dir, 'clients-2026-11-07.json', '{"clients": [');
+  const result = handlers.get('data:load')();
+  assert.match(result.__error, /Could not read the data file/);
+  assert.deepEqual(result.backups, [
+    { file: 'clients-2026-11-08.json', date: '2026-11-08', clients: 1, visits: 1 },
+    { file: 'clients-2026-11-06.json', date: '2026-11-06', clients: 2, visits: 2 },
+  ]);
+});
+
+test('restoring a daily backup reads plain backup names only', t => {
+  const { handlers, dir } = mainContext(t);
+  const data = { clients: [{ id: 'a', visits: [] }] };
+  writeBackup(dir, 'clients-2026-11-08.json', data);
+  writeBackup(dir, 'unreadable-x.json', data);
+  fs.writeFileSync(path.join(dir, 'clients.json'), JSON.stringify(data));
+  const restore = name => handlers.get('data:restoreDaily')(null, name);
+  assert.deepEqual(restore('clients-2026-11-08.json'), data);
+  for (const bad of ['..\\clients.json', '../clients.json', 'clients-2026-11-08.json\\..\\x',
+    path.join(dir, 'clients.json'), 'unreadable-x.json', 'clients-2026-11-09.json', undefined])
+    assert.throws(() => restore(bad), bad === 'clients-2026-11-09.json' ? /could not be read/ : /not a daily backup/);
+});
+
+test('a damaged data file is never copied into the daily backups and pushes none out', t => {
+  const { dir } = mainContext(t);
+  for (let d = 1; d <= 16; d++) writeBackup(dir, `clients-2026-10-${String(d).padStart(2, '0')}.json`, { clients: [] });
+  fs.writeFileSync(path.join(dir, 'clients.json'), '{"clients": [tru');
+  load('paths').dailyBackup();
+  assert.equal(fs.readdirSync(path.join(dir, 'backups')).filter(f => /^clients-/.test(f)).length, 16);
+});
+
+test('address caches waiting to be written are saved when the app closes', t => {
+  const { dir } = mainContext(t);
+  const { geoCache } = load('geocode');
+  geoCache.get()['fictional address'] = { lat: 45, lng: 4 };
+  geoCache.saveSoon();
+  geoCache.flush();
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, 'geocode-cache.json'), 'utf8')), { 'fictional address': { lat: 45, lng: 4 } });
+});
+
+test('Google Maps links are accepted from Google hosts only', async t => {
+  const { handlers } = mainContext(t);
+  const resolve = link => handlers.get('google:resolveLink')(null, link);
+  assert.equal((await resolve('https://www.google.co.uk/maps/place/Caf%C3%A9+Fictif/@51.5,-0.1,17z')).name, 'Café Fictif');
+  assert.equal((await resolve('https://maps.google.com/?q=Fictional+shop')).name, 'Fictional shop');
+  for (const link of ['https://www.google.example.com/maps/place/X', 'https://notgoogle.com/maps/place/X', 'https://blog.co/maps'])
+    assert.match((await resolve(link)).error, /not a Google Maps link/);
+});
+
 test('backup round trip includes prospects and writes a safety copy before restore', async t => {
   const { handlers, dir } = mainContext(t);
   const data = { settings: {}, clients: [{ id: 'c', visits: [{ date: '2026-01-01' }] }], groups: [],

@@ -54,13 +54,65 @@ $('#export-menu').addEventListener('click', e => {
 });
 document.addEventListener('click', () => { $('#export-menu').hidden = true; });
 
+// ---------- Recovery (the data file could not be read) ----------
+// Until the user chooses, nothing is saved (see save() in state.js), so the damaged file and backups stay safe.
+function startRecovery(info) {
+  state.recovery = info;
+  loadData({});
+  recoveryDialog();
+}
+// Resume locating addresses left over from last time, then Google pages not looked up yet.
+function resumeBackgroundWork(delay) {
+  if (state.derived.pending.length) geocodeClients(state.derived.pending).then(afterLocate);
+  else setTimeout(autoLookupGoogle, delay);
+}
+function recoveryDialog() {
+  const backups = state.recovery?.backups || [];
+  const plural = (n, w) => `${n.toLocaleString()} ${w}${n === 1 ? '' : 's'}`;
+  const label = b => `${esc(fmtDate(b.date))} — ${plural(b.clients, 'client')}, ${plural(b.visits, 'visit')}`;
+  const buttons = [
+    {
+      label: 'Start empty',
+      async fn(close) {
+        if (!(await confirmDialog('Start with an empty list?', 'The app will start with no clients. You can still import a list or restore a backup later. The damaged file stays in the backups folder.', 'Start empty', true))) return;
+        // Save at once: anything imported while the choice was pending has not been written yet.
+        state.recovery = null; close(); save(); renderAll();
+      },
+    },
+    { label: 'Open a backup file…', fn(close) { close(); restoreBackup(); } },
+  ];
+  if (backups.length) buttons.push({
+    label: 'Restore this backup', primary: true,
+    async fn(close, box) {
+      const err = t => { box.querySelector('#rec-err').textContent = t; };
+      const b = backups.find(x => x.file === box.querySelector('input[name="rec"]:checked')?.value);
+      if (!b) return err('Choose a backup first.');
+      let data;
+      try { data = await window.api.restoreDailyBackup(b.file); } catch (e) { return err(e.message || 'That backup could not be restored.'); }
+      state.recovery = null; close();
+      loadData(data); save(); fitAll();
+      toast(`Backup of ${fmtDate(b.date)} restored: ${plural(state.data.clients.length, 'client')}.`);
+      resumeBackgroundWork(1500);
+    },
+  });
+  showModal({
+    title: 'Your data could not be read',
+    desc: 'The app could not open its data file. A copy of the damaged file was kept in the backups folder, and nothing is saved until you make a choice.',
+    render: () => `
+      <p class="note">${esc(state.recovery?.__error || '')}</p>
+      ${backups.length ? `<div class="field" style="margin-top:12px"><label>Restore a daily backup</label>
+        <div class="radio-list">${backups.map((b, i) => `<label><input type="radio" name="rec" value="${esc(b.file)}"${i === 0 ? ' checked' : ''}><span>${label(b)}</span></label>`).join('')}</div></div>`
+        : '<p style="margin-top:12px">No daily backup is available.</p>'}
+      <div class="err" id="rec-err"></div>`,
+    buttons,
+  });
+}
+
 (async function init() {
   const data = await window.api.loadData();
-  if (data && data.__error) toast(data.__error, { error: true });
   try { state.googleKey = await window.api.googleKeyStatus(); } catch { /* keep default */ }
-  loadData(data && !data.__error ? data : {});
+  if (data && data.__error) { startRecovery(data); return; }
+  loadData(data || {});
   fitAll();
-  // Resume locating addresses left over from last time, then Google pages not looked up yet.
-  if (state.derived.pending.length) geocodeClients(state.derived.pending).then(afterLocate);
-  else setTimeout(autoLookupGoogle, 1500);
+  resumeBackgroundWork(1500);
 })();

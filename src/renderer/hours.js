@@ -223,7 +223,8 @@
    */
   function judge(client, places) {
     const located = client.preciseLocation && Number.isFinite(client.lat) && Number.isFinite(client.lng);
-    const pc = String(client.postcode || '').trim();
+    // The postal code goes into a search pattern: characters with a special meaning there are neutralised.
+    const pc = String(client.postcode || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const num = (/^\s*(\d+)/.exec(client.address || '') || [])[1];
     const scored = places.map(p => {
       const sim = nameSimilarity(client.name, p.name);

@@ -149,7 +149,7 @@ function sheetProspectsDialog(file) {
     const st = { sheet: 0, header: true, mapping: null };
     const sheetData = () => {
       const rows = file.sheets[st.sheet].rows;
-      const width = Math.max(...rows.map(r => r.length));
+      const width = rows.reduce((m, r) => Math.max(m, r.length), 0);
       const headers = Array.from({ length: width }, (_, i) => (st.header && String(rows[0][i] ?? '').trim()) || `Column ${colLetter(i)}`);
       return { headers, data: st.header ? rows.slice(1) : rows };
     };
@@ -439,14 +439,17 @@ function renderProspectLayer() {
   areaLayer.clearLayers(); prospectLayer.clearLayers();
   if (state.tab !== 'prospecting' || !state.data.prospecting) return;
   const d = P();
-  if (d.areas.length) {
-    L.geoJSON(d.areas, {
-      style: () => ({ color: AREA_COLOR, weight: 2, opacity: 0.8, fillColor: AREA_COLOR, fillOpacity: 0.07 }),
-      onEachFeature(f, layer) {
-        const n = f.properties?.name, desc = f.properties?.description;
-        if (n || desc) layer.bindTooltip(`<b>${esc(n || 'Area')}</b>${desc ? `<span>${esc(desc).slice(0, 300)}</span>` : ''}`, { className: 'tip', sticky: true });
-      },
-    }).addTo(areaLayer);
+  // One shape at a time: a shape the map can't draw (damaged file) is skipped instead of stopping the whole display.
+  for (const area of d.areas) {
+    try {
+      L.geoJSON(area, {
+        style: () => ({ color: AREA_COLOR, weight: 2, opacity: 0.8, fillColor: AREA_COLOR, fillOpacity: 0.07 }),
+        onEachFeature(f, layer) {
+          const n = f.properties?.name, desc = f.properties?.description;
+          if (n || desc) layer.bindTooltip(`<b>${esc(n || 'Area')}</b>${desc ? `<span>${esc(desc).slice(0, 300)}</span>` : ''}`, { className: 'tip', sticky: true });
+        },
+      }).addTo(areaLayer);
+    } catch { /* skip bad shape */ }
   }
   for (const p of d.prospects) {
     if (!hasLoc(p)) continue;

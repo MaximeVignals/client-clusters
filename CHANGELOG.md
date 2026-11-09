@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.9.2 — 2026-11-09
+
+### Added
+
+- Recovery screen: when the data file can't be read at startup, the app offers the readable daily backups (date, clients and visits), a backup file, or an empty start. Nothing is saved until you choose, and a “Recover…” banner stays visible if the dialog is closed.
+
+### Fixed
+
+- A damaged data file is copied to the backups folder before anything can replace it, and the daily backup no longer copies a damaged file over the good ones.
+- “Locate this address again” keeps a pin placed by hand or read from a file when the address isn't found.
+- A client added by hand is saved before the address search, not after it.
+- Addresses found just before closing the app are written to the address cache.
+- Cancelling a confirmation shown over another dialog brings that dialog back exactly as it was (in Restore, the password and the Combine / Replace choice were reset).
+- A dialog that was closed can no longer change or close the next one when a slow search answers late.
+- Town names with special characters no longer break a row of the groups list.
+- A postal code containing punctuation no longer stops the Google page matching.
+- A damaged shape in a prospecting file is skipped instead of stopping the map.
+- Very long sheets can be imported.
+- Google Maps links are accepted from Google addresses only.
+- Map and address requests identify the app with its real version.
+
+### Compatibility and validation
+
+- No change to data, file formats or backups. No data migration is required.
+- Windows packages still use Electron 44.10.1, so the update ZIP works on 1.9.0 and 1.9.1 folder installations.
+- Validation: 18 core/main-process tests and the Electron smoke and UI suites.
+
 ## 1.9.1 — 2026-11-04
 
 ### Improved

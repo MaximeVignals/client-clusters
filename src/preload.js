@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('api', {
   loadData: () => ipcRenderer.invoke('data:load'),
   saveData: data => ipcRenderer.invoke('data:save', data),
+  restoreDailyBackup: file => ipcRenderer.invoke('data:restoreDaily', file),
   openDataFolder: () => ipcRenderer.invoke('data:openFolder'),
   saveBackup: opts => ipcRenderer.invoke('backup:save', opts),
   openBackup: () => ipcRenderer.invoke('backup:open'),

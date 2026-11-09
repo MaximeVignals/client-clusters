@@ -12,9 +12,16 @@ let failed = 0;
 const errors = [];
 ipcMain.handle('data:load', () => null);
 ipcMain.handle('data:save', (_e, data) => { saved = data; return true; });
+ipcMain.handle('data:restoreDaily', (_e, file) => {
+  if (file !== 'clients-2026-11-08.json') throw new Error('No such backup');
+  return { clients: [
+    { id: 'r1', name: 'Fictional one', visits: [{ id: 'rv', date: '2026-01-01', status: 'done', type: 'visit' }] },
+    { id: 'r2', name: 'Fictional two' },
+  ], groups: [] };
+});
 ipcMain.handle('google:keyStatus', () => ({ hasKey: false, masked: '' }));
 ipcMain.handle('geo:town', () => ({ city: 'Test town', postcode: '69001' }));
-ipcMain.handle('geo:geocode', () => ({ lat: 45.76, lng: 4.84, city: 'Lyon', score: 1 }));
+ipcMain.handle('geo:geocode', (_e, { query }) => (/nowhere/i.test(query) ? { error: 'Address not found' } : { lat: 45.76, lng: 4.84, city: 'Lyon', score: 1 }));
 ipcMain.handle('import:open', () => ({ fileName: 'Fictional clients.xlsx', sheets: [{ name: 'Clients', rows: [
   ['Name', 'Address', 'Postcode', 'City', 'Latitude', 'Longitude'], ['Example client', '1 Example street', '69001', 'Lyon', 45.76, 4.84],
 ] }] }));
@@ -71,6 +78,29 @@ app.whenReady().then(async () => {
     check(c.visits.find(v => v.type === 'call').status === 'planned', 'call was confirmed as a visit');
     check(c.visits.find(v => v.type === 'visit').status === 'done', 'visit was not confirmed');
   `);
+  await check('a closed dialog cannot touch its replacement, and a confirmation keeps what was typed', `
+    let lateClose, lateRerender;
+    showModal({ title: 'First', render: () => '<input id="first">', buttons: [{ label: 'Close', action: 'close' }],
+      onClick(e, box, close, rerender) { lateClose = close; lateRerender = rerender; } });
+    $('#modal-box .modal-body').click();
+    modalCtx.close();
+    showModal({ title: 'Second', render: () => '<input id="second">', buttons: [{ label: 'Close', action: 'close' }] });
+    $('#second').value = 'typed';
+    lateRerender(); lateClose();
+    check(!$('#modal').hidden && $('#second')?.value === 'typed', 'a closed dialog changed the one on screen');
+    const answer = confirmDialog('Sure?', 'Fictional question');
+    check(!$('#second'), 'confirmation not shown');
+    modalCtx.close();
+    check((await answer) === false && $('#second')?.value === 'typed', 'typed text was lost behind the confirmation');
+    modalCtx.close();
+    check($('#modal').hidden && !modalCtx, 'dialog did not close after the confirmation');
+  `);
+  await check('a failed address search keeps a pin placed by hand', `
+    const c = { name: 'Fictional', address: 'Nowhere street', geo: { source: 'manual' }, lat: 45, lng: 4 };
+    check((await geocodeOne(c)) === false && c.lat === 45 && c.geo.source === 'manual', 'hand-placed pin was removed');
+    const d = { name: 'Fictional', address: 'Nowhere street', geo: { status: 'ok', source: 'IGN' }, lat: 45, lng: 4 };
+    check((await geocodeOne(d)) === false && d.lat === undefined && d.geo.status === 'failed', 'an address that is no longer found kept its old position');
+  `);
   await check('combining backups preserves calls and visits on the same day', `
     loadData({ clients: [{ id: 'c', name: 'Client', visits: [{ id: 'v1', date: '2026-01-01', type: 'visit', status: 'done', note: '' }] }] });
     mergeBackup({ clients: [{ id: 'c', name: 'Client', visits: [{ id: 'v2', date: '2026-01-01', type: 'call', status: 'done', note: '' }] }] });
@@ -106,6 +136,33 @@ app.whenReady().then(async () => {
     check(P().prospects[0].status === 'visited', 'latest status was lost');
     check(P().areas.length === 1, 'duplicate area was added');
   `);
+  await check('recovery screen opens and pauses saving', `
+    startRecovery({ __error: 'Fictional error', backups: [{ file: 'clients-2026-11-08.json', date: '2026-11-08', clients: 2, visits: 1 }] });
+    check(!$('#modal').hidden && $('#modal-title').textContent === 'Your data could not be read', 'recovery dialog missing');
+    check($('#banners [data-b="recover"]'), 'recovery banner missing');
+  `);
+  saved = undefined;
+  await js('save(); flushSave();');
+  await new Promise(r => setTimeout(r, 350));
+  if (saved !== undefined) { failed++; console.error('FAIL saving is not paused during recovery'); }
+  else console.log('PASS saving is paused during recovery');
+  await check('closing the recovery dialog keeps recovery pending, the banner reopens it', `
+    modalCtx.close();
+    check($('#modal').hidden && state.recovery, 'recovery ended by closing');
+    check($('#banners [data-b="recover"]'), 'banner disappeared');
+    $('#banners [data-b="recover"]').click();
+    check(!$('#modal').hidden, 'banner did not reopen the dialog');
+  `);
+  saved = undefined;
+  await check('restoring the daily backup ends recovery and resumes saving', `
+    $('#modal-box [data-mb="2"]').click();
+    for (let i = 0; i < 100 && state.recovery; i++) await new Promise(r => setTimeout(r, 20));
+    check(state.recovery === null && state.data.clients.length === 2, 'backup not restored');
+    check($('#modal').hidden, 'dialog still open');
+  `);
+  await new Promise(r => setTimeout(r, 350));
+  if (!saved || saved.clients.length !== 2) { failed++; console.error('FAIL restored backup was not saved'); }
+  else console.log('PASS restored backup was saved');
   await check('client import updates existing clients and preserves visit history', `
     loadData({ clients: [{ id: 'c1', name: 'Test', address: 'A', postcode: '69001', city: 'Lyon', lat: 45, lng: 4,
       visits: [{ id: 'visit', date: '2026-01-01', status: 'done', type: 'visit' }] }], groups: [{ id: 'g', number: 1, name: 'Lyon', color: '#2563eb' }] });

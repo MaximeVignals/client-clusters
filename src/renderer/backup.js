@@ -135,6 +135,7 @@ async function restoreBackup() {
       flushSave();
       const a = await window.api.applyBackup({ current: state.data.demo ? null : state.data });
       if (!a.ok) return err(a.error || 'The backup could not be restored.');
+      state.recovery = null; // the backup is in; from now on the data can be saved
       close();
       let msg;
       if (st.mode === 'replace') {

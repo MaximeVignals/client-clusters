@@ -42,7 +42,8 @@ function renderTabs() {
 
 function renderBanners() {
   const d = state.derived, out = [];
-  if (state.tab === 'prospecting') { $('#banners').innerHTML = ''; return; }
+  if (state.recovery) out.push(`<div class="banner">Your data could not be read. Nothing is saved until you choose what to do.<div class="acts"><button class="btn small primary" data-b="recover">Recover…</button></div></div>`);
+  if (state.tab === 'prospecting') { $('#banners').innerHTML = out.join(''); return; }
   if (d.unconfirmed.length && state.tab !== 'planned') {
     const n = d.unconfirmed.length;
     out.push(`<div class="banner">${n} planned visit${n > 1 ? 's have' : ' has'} passed without being confirmed. Did ${n > 1 ? 'they' : 'it'} happen?<div class="acts"><button class="btn small primary" data-b="unconfirmed">Review</button></div></div>`);
@@ -76,6 +77,7 @@ $('#banners').addEventListener('click', e => {
   const b = e.target.closest('[data-b]');
   if (!b) return;
   const act = b.dataset.b;
+  if (act === 'recover') recoveryDialog();
   if (act === 'unconfirmed') { state.tab = 'planned'; renderAll(); renderDetail(); }
   if (act === 'locate') geocodeClients(state.derived.pending).then(afterLocate);
   if (act === 'review-unlocated') reviewUnlocated();
@@ -120,7 +122,7 @@ function renderGroupsList() {
       <button class="row" data-group="${g.id}">
         <span class="swatch" style="background:${g.color}">${g.number}</span>
         <span class="main"><div class="title" title="${esc(g.name)}">${esc(g.name)}</div><div class="sub" title="${esc(towns.join(', '))}">${esc(subTxt)}</div></span>
-        <span class="side"><span class="size${info.members.length > S().flexSize || (info.members.length > max && towns.length > 1) ? ' over' : ''}" title="${info.members.length > max ? (towns.length === 1 && info.members.length <= S().flexSize ? 'A bit over the usual size to keep ' + towns[0] + ' in one group' : 'More clients than the group size limit') : ''}">${info.members.length} client${info.members.length === 1 ? '' : 's'}</span>${info.homeKm !== null && info.homeKm !== undefined ? `<span class="homekm" title="From home to the middle of the group, as the crow flies">${fmtKm(info.homeKm)} from home</span>` : ''}${groupLabel(info)}${info.plannedCount ? `<span class="homekm plan-note" title="Clients of this group with a visit planned">${info.plannedCount} planned · next ${esc(fmtShort(info.nextPlanned))}</span>` : ''}</span>
+        <span class="side"><span class="size${info.members.length > S().flexSize || (info.members.length > max && towns.length > 1) ? ' over' : ''}" title="${info.members.length > max ? (towns.length === 1 && info.members.length <= S().flexSize ? 'A bit over the usual size to keep ' + esc(towns[0]) + ' in one group' : 'More clients than the group size limit') : ''}">${info.members.length} client${info.members.length === 1 ? '' : 's'}</span>${info.homeKm !== null && info.homeKm !== undefined ? `<span class="homekm" title="From home to the middle of the group, as the crow flies">${fmtKm(info.homeKm)} from home</span>` : ''}${groupLabel(info)}${info.plannedCount ? `<span class="homekm plan-note" title="Clients of this group with a visit planned">${info.plannedCount} planned · next ${esc(fmtShort(info.nextPlanned))}</span>` : ''}</span>
       </button>`;
     if (!sel) return `<div class="group">${head}</div>`;
     const members = info.members.slice().sort((a, b) => urgencyOf(b) - urgencyOf(a) || a.name.localeCompare(b.name));
@@ -130,7 +132,7 @@ function renderGroupsList() {
     const spread = [towns.length > 1 ? `${towns.length} towns: ${towns.join(', ')}` : '', info.spreadKm >= 0.1 ? `all within about ${info.spreadKm < 10 ? info.spreadKm.toFixed(1) : Math.round(info.spreadKm)} km` : '',
       withHours ? `${openNow} of ${withHours} with known hours open now` : ''].filter(Boolean).join(' · ').replace(/^a/, 'A');
     return `<div class="group selected">${head}
-      ${spread ? `<div class="group-meta">${spread}</div>` : ''}
+      ${spread ? `<div class="group-meta">${esc(spread)}</div>` : ''}
       <div class="members">${rows || '<div class="none">No clients in this group.</div>'}
         <div class="group-acts">
           <button class="btn small primary" data-gact="plan" data-id="${g.id}">Plan visits…</button>

@@ -4,7 +4,7 @@ const { app, BrowserWindow, ipcMain, shell, Menu, session, screen } = require('e
 const path = require('path');
 const { APP_UA, ui, dailyBackup } = require('./main/paths');
 require('./main/files');
-require('./main/geocode');
+const { geoCache, townCache } = require('./main/geocode');
 require('./main/google');
 require('./main/backup');
 
@@ -64,6 +64,8 @@ if (!app.requestSingleInstanceLock()) {
     createWindow();
   });
   app.on('window-all-closed', () => app.quit());
+  // Addresses found in the last second or two are still waiting to be written to the cache files.
+  app.on('will-quit', () => { geoCache.flush(); townCache.flush(); });
 }
 
 ipcMain.handle('app:openExternal', (_e, url) => {

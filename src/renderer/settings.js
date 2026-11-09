@@ -55,8 +55,10 @@ function settingsDialog({ focus } = {}) {
         b.disabled = true; b.textContent = 'Finding…';
         const r = await window.api.geocode({ query: q, postcode: (/\b\d{5}\b/.exec(q) || [])[0] || '', country: '' });
         b.disabled = false; b.textContent = 'Find';
-        if (r && Number.isFinite(r.lat)) { home = { address: q, label: r.label, lat: r.lat, lng: r.lng }; box.querySelector('#s-home-msg').innerHTML = homeMsg(); }
-        else box.querySelector('#s-home-msg').innerHTML = '<span class="bad">Address not found. Check it, add the postal code and town, then click Find.</span>';
+        const msg = box.querySelector('#s-home-msg');
+        if (!msg) return; // Settings was closed while searching
+        if (r && Number.isFinite(r.lat)) { home = { address: q, label: r.label, lat: r.lat, lng: r.lng }; msg.innerHTML = homeMsg(); }
+        else msg.innerHTML = '<span class="bad">Address not found. Check it, add the postal code and town, then click Find.</span>';
       }
       if (b.dataset.s === 'remove-key') {
         await window.api.googleSetKey('');

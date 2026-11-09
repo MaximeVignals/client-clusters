@@ -26,6 +26,7 @@ const state = {
   placingClientId: null,
   geocoding: null,           // { total, done, stop }
   derived: null,
+  recovery: null,            // set while the data file couldn't be read and the user hasn't chosen what to do
 };
 const S = () => state.data.settings;
 const clientById = id => state.data.clients.find(c => c.id === id);
@@ -41,10 +42,12 @@ const notLookedUp = c => !c.gbp || c.gbp.status === 'pending';
 let saveTimer = null;
 function save() {
   clearTimeout(saveTimer);
+  if (state.recovery) return; // saving now would overwrite the damaged file and the backups
   saveTimer = setTimeout(flushSave, 250);
 }
 function flushSave() {
   clearTimeout(saveTimer);
+  if (state.recovery) return;
   window.api.saveData(state.data).catch(e => toast('Could not save: ' + e.message, { error: true }));
 }
 window.addEventListener('beforeunload', () => { if (saveTimer) flushSave(); });

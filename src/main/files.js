@@ -4,16 +4,49 @@ const path = require('path');
 const fs = require('fs');
 const XLSX = require('xlsx');
 const JSZip = require('jszip');
-const { ui, dataDir, dataFile, writeAtomic } = require('./paths');
+const { ui, dataDir, dataFile, backupDir, writeAtomic, DAILY_RE } = require('./paths');
 
 // ---------- Data ----------
+// Daily backups that still parse and hold a client list, newest first (offered when the data file is damaged).
+function usableDailyBackups() {
+  const out = [];
+  try {
+    for (const file of fs.readdirSync(backupDir()).filter(f => DAILY_RE.test(f)).sort().reverse()) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(backupDir(), file), 'utf8'));
+        if (!data || !Array.isArray(data.clients)) continue;
+        const visits = data.clients.reduce((n, c) => n + (c && Array.isArray(c.visits) ? c.visits.length : 0), 0);
+        out.push({ file, date: file.slice(8, 18), clients: data.clients.length, visits });
+      } catch { /* damaged backup: left out */ }
+    }
+  } catch { /* no backups folder to read */ }
+  return out;
+}
+
 ipcMain.handle('data:load', () => {
   try {
     if (!fs.existsSync(dataFile())) return null;
     return JSON.parse(fs.readFileSync(dataFile(), 'utf8'));
   } catch (e) {
-    return { __error: 'Could not read the data file: ' + e.message };
+    // The window starts empty after this, and the next save replaces the file: keep what is there first.
+    let kept = '';
+    try {
+      const copy = path.join(backupDir(), `unreadable-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+      fs.copyFileSync(dataFile(), copy);
+      kept = ` A copy was kept as backups\\${path.basename(copy)} in the data folder.`;
+    } catch { /* nothing more can be done */ }
+    return { __error: 'Could not read the data file: ' + e.message + '.' + kept, backups: usableDailyBackups() };
   }
+});
+
+// Only a plain daily backup name is accepted, so the window can never make this read another path.
+ipcMain.handle('data:restoreDaily', (_e, file) => {
+  if (typeof file !== 'string' || !DAILY_RE.test(file)) throw new Error('That is not a daily backup file name.');
+  let data;
+  try { data = JSON.parse(fs.readFileSync(path.join(backupDir(), file), 'utf8')); }
+  catch { throw new Error('That backup could not be read.'); }
+  if (!data || !Array.isArray(data.clients)) throw new Error('That backup does not contain a client list.');
+  return data;
 });
 
 ipcMain.handle('data:save', (_e, data) => {
