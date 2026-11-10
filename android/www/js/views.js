@@ -143,7 +143,7 @@ const Views = (() => {
       <h2>Appearance</h2><div class="seg" id="appearance">${['system', 'light', 'dark'].map(k => `<button data-act="appearance" data-v="${k}" class="${ap === k ? 'on' : ''}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>
       <h2>This phone</h2><button class="btn danger full" data-act="disconnect">Disconnect this phone</button>
       <p class="muted small">Deletes the data stored on this phone. Your data on the PC is not affected.</p>
-      <p class="muted small">Client Clusters Android 1.0.0</p>`;
+      <p class="muted small">Client Clusters Android 1.0.1</p>`;
   }
 
   function pairControls(label) {
