@@ -19,6 +19,12 @@ ipcMain.handle('data:restoreDaily', (_e, file) => {
     { id: 'r2', name: 'Fictional two' },
   ], groups: [] };
 });
+ipcMain.handle('sync:status', () => ({ enabled: false, state: 'off', error: null, lastSyncAt: 0, paused: false }));
+const syncLog = []; // order of sync calls from the window: recovery must compare with the phones (rebase) before sync resumes
+ipcMain.handle('sync:pause', (_e, p) => { syncLog.push('pause:' + p); return { enabled: false, state: 'off', paused: !!p }; });
+ipcMain.handle('sync:rebase', () => { syncLog.push('rebase'); return { ok: true, skipped: true, restored: 0 }; });
+ipcMain.handle('sync:applied', () => true);
+ipcMain.handle('sync:confirmDeletes', () => ({ ok: true }));
 ipcMain.handle('google:keyStatus', () => ({ hasKey: false, masked: '' }));
 ipcMain.handle('geo:town', () => ({ city: 'Test town', postcode: '69001' }));
 ipcMain.handle('geo:geocode', (_e, { query }) => (/nowhere/i.test(query) ? { error: 'Address not found' } : { lat: 45.76, lng: 4.84, city: 'Lyon', score: 1 }));
@@ -153,7 +159,7 @@ app.whenReady().then(async () => {
     $('#banners [data-b="recover"]').click();
     check(!$('#modal').hidden, 'banner did not reopen the dialog');
   `);
-  saved = undefined;
+  saved = undefined; syncLog.length = 0;
   await check('restoring the daily backup ends recovery and resumes saving', `
     $('#modal-box [data-mb="2"]').click();
     for (let i = 0; i < 100 && state.recovery; i++) await new Promise(r => setTimeout(r, 20));
@@ -163,6 +169,10 @@ app.whenReady().then(async () => {
   await new Promise(r => setTimeout(r, 350));
   if (!saved || saved.clients.length !== 2) { failed++; console.error('FAIL restored backup was not saved'); }
   else console.log('PASS restored backup was saved');
+  for (let i = 0; i < 100 && !syncLog.includes('rebase'); i++) await new Promise(r => setTimeout(r, 20));
+  // (the UI suite swaps the pause stub, so only the order is checked: rebase first, never a resume before it)
+  if (syncLog[0] !== 'rebase') { failed++; console.error('FAIL recovery restore must rebase, then resume sync: ' + syncLog.join()); }
+  else console.log('PASS recovery restore rebases before sync resumes');
   await check('client import updates existing clients and preserves visit history', `
     loadData({ clients: [{ id: 'c1', name: 'Test', address: 'A', postcode: '69001', city: 'Lyon', lat: 45, lng: 4,
       visits: [{ id: 'visit', date: '2026-01-01', status: 'done', type: 'visit' }] }], groups: [{ id: 'g', number: 1, name: 'Lyon', color: '#2563eb' }] });

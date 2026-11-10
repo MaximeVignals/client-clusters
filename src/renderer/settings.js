@@ -44,9 +44,11 @@ function settingsDialog({ focus } = {}) {
         <div class="inline" style="margin-top:6px"><span>Update hours from Google every</span><input type="number" id="s-hrefresh" min="0" max="365" value="${s.hoursRefreshDays}"><span>days (0 = only when I ask).</span></div>
         <p class="note">The key needs “Places API (New)” enabled in a Google Cloud project with billing. Google gives a free allowance each month (currently about 1,000 opening-hours reads); finding a client's page and reading its hours costs one read, plus one search. The key is stored encrypted on this computer and is not included in backups.</p>
       </div>
+      <div class="field sync-section" id="sync-section">${window.SyncUI ? SyncUI.html() : ''}</div>
       <div class="err" id="s-err"></div>`,
     buttons: [{ label: 'Cancel', action: 'close' }, { label: 'Save', primary: true, action: 'ok' }],
     async onClick(e, box) {
+      if (e.target.closest('[data-sync]')) return window.SyncUI?.click(e);
       const b = e.target.closest('[data-s]');
       if (!b) return;
       if (b.dataset.s === 'find-home') {
@@ -133,6 +135,7 @@ function settingsDialog({ focus } = {}) {
       } else if (key) toast('Google API key updated.');
     },
   });
+  if (window.SyncUI) { box$('#sync-section')?.addEventListener('keydown', SyncUI.key); SyncUI.mount(); }
   if (focus) setTimeout(() => box$(focus)?.focus(), 60);
 }
 

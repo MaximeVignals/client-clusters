@@ -7,6 +7,7 @@ require('./main/files');
 const { geoCache, townCache } = require('./main/geocode');
 require('./main/google');
 require('./main/backup');
+const sync = require('./main/sync');
 
 const isWebUrl = url => /^https?:\/\//.test(url);
 
@@ -61,6 +62,7 @@ if (!app.requestSingleInstanceLock()) {
       { urls: ['https://tile.openstreetmap.org/*', 'https://data.geopf.fr/*'] },
       (details, cb) => { details.requestHeaders['User-Agent'] = APP_UA; cb({ requestHeaders: details.requestHeaders }); });
     dailyBackup();
+    sync.init();
     createWindow();
   });
   app.on('window-all-closed', () => app.quit());

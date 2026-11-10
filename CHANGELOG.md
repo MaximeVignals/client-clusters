@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.10.0 — unreleased
+
+### Added
+
+- Sync with the new Android companion app through a self-hosted PHP relay (`server/`), end-to-end encrypted (AES-256-GCM; the relay never sees readable data or the key).
+- *Settings → Sync*: test a relay, turn sync on or off, add a phone with a QR code, list and disconnect phones, sync now. A status chip shows synced / syncing / offline / errors.
+- Changes from the phone (visits, visit status, client notes, prospect status and notes) are merged field by field; the latest edit wins. A visit logged on the phone for a client deleted on Windows restores that client.
+- Android companion (`android/`, Capacitor): Today, Map, Client, Prospects and Settings screens, fully offline, syncing when online.
+- *Reset sync key* after disconnecting a lost phone, so it can't read future data.
+- Safety: restoring an older backup or recovering a damaged file never removes newer data from the phones (it is merged back); removing more than 5 clients or prospects or 20 visits asks before the phones are changed; every change from a phone is checked field by field, and a bad one is set aside instead of stopping sync.
+
+### Compatibility and validation
+
+- Sync is off by default; data file and backups are unchanged. Sync settings and keys are stored encrypted and never included in `.ccbackup` files.
+- Visit rules moved to `src/shared/visits.js`, shared with the Android app; behaviour unchanged.
+
 ## 1.9.2 — 2026-11-09
 
 ### Added

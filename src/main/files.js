@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const XLSX = require('xlsx');
 const JSZip = require('jszip');
+const sync = require('./sync');
 const { ui, dataDir, dataFile, backupDir, writeAtomic, DAILY_RE } = require('./paths');
 
 // ---------- Data ----------
@@ -51,6 +52,7 @@ ipcMain.handle('data:restoreDaily', (_e, file) => {
 
 ipcMain.handle('data:save', (_e, data) => {
   writeAtomic(dataFile(), JSON.stringify(data, null, 1));
+  try { sync.onSaved(data); } catch (e) { console.error('Sync hook failed', e); } // never lets sync break saving
   return true;
 });
 

@@ -53,14 +53,16 @@ function showModal(opts) {
   }, 30);
 }
 
-function confirmDialog(title, message, okLabel = 'OK', danger = false) {
+// A question with several labelled answers. choices: [{ label, value, primary?, danger? }]. Resolves the chosen value,
+// or null when the dialog is dismissed (Esc, click outside).
+function choiceDialog(title, message, choices) {
   return new Promise(resolve => {
     const box = $('#modal-box');
-    const prev = modalCtx; // confirm can open on top of another dialog
+    const prev = modalCtx; // it can open on top of another dialog
     // Keep that dialog's own elements (not a copy of its HTML), so what was typed or ticked in it comes back too.
     const prevNodes = prev ? [...box.childNodes] : null;
     const prevClass = box.className;
-    let answered = false;
+    let answer = null;
     const restore = () => {
       if (!prev) return;
       box.replaceChildren(...prevNodes); box.className = prevClass; $('#modal').hidden = false;
@@ -69,10 +71,13 @@ function confirmDialog(title, message, okLabel = 'OK', danger = false) {
     };
     showModal({
       title, render: () => `<p style="margin:0">${message}</p>`,
-      buttons: [{ label: 'Cancel', action: 'close' }, { label: okLabel, primary: !danger, danger, fn: close => { answered = true; close(); } }],
-      onClose: () => { restore(); resolve(answered); },
+      buttons: choices.map(c => ({ label: c.label, primary: !!c.primary, danger: !!c.danger, fn: close => { answer = c.value; close(); } })),
+      onClose: () => { restore(); resolve(answer); },
     });
   });
+}
+async function confirmDialog(title, message, okLabel = 'OK', danger = false) {
+  return (await choiceDialog(title, message, [{ label: 'Cancel', value: false }, { label: okLabel, value: true, primary: !danger, danger }])) === true;
 }
 function toast(msg, { error, action } = {}) {
   const t = document.createElement('div');

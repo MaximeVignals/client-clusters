@@ -1,7 +1,7 @@
 {
   "name": "client-clusters",
   "productName": "Client Clusters",
-  "version": "1.9.2",
+  "version": "1.10.0",
   "description": "Group clients into nearby clusters and track visits",
   "main": "src/main.js",
   "author": "Maxime Vignals <contact@maximevignals.fr>",
@@ -56,6 +56,7 @@
   },
   "dependencies": {
     "jszip": "^3.10.1",
+    "qrcode": "^1.5.4",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {

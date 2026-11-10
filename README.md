@@ -119,6 +119,25 @@ and keeps their visit history.
   with them, or set their priority.
 - **Excel export** has a *Planned* sheet; the *Visits* sheet holds the history with status, type and outcome.
 
+## Sync and Android
+
+Client Clusters has an Android companion for the field: today's planned visits, the map, client details
+(tap to call, *Navigate*), logging visits, marking planned visits done or didn't happen, client notes,
+and prospect status and notes. Importing, grouping, Google hours, planning and exports stay on Windows.
+
+The phone and the PC sync through a small relay you host yourself on any PHP 8 web hosting with HTTPS
+(cheap shared hosting is enough, no database). Everything is encrypted on your devices before it leaves
+them: the relay only stores unreadable data, and the key never reaches it.
+
+1. **Set up the relay**: follow [server/README.md](server/README.md) (copy the `server` folder, set a setup code).
+2. **Turn on sync on Windows**: *Settings → Sync*, enter the relay address and setup code, *Test connection*,
+   then *Turn on sync*.
+3. **Add your phone**: *Settings → Sync → Add a phone* shows a QR code. Install the Android app (APK from the
+   [Releases](https://github.com/MaximeVignals/client-clusters/releases) page), open it and scan the code.
+
+Sync is off until you turn it on; without it the Windows app works exactly as before. Anyone holding a pairing
+code can read your data, so don't share it. *Disconnect* removes a phone's access to the relay.
+
 ## Where data is stored
 
 `%APPDATA%\client-clusters\clients.json` (… menu → *Open data folder*). A daily backup is kept in the

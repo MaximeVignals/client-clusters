@@ -131,10 +131,15 @@ async function restoreBackup() {
       const err = t => { box.querySelector('#r-err').textContent = t; };
       const pw = box.querySelector('#r-pass')?.value || '';
       if (pw) { const k = await window.api.unlockBackupKey(pw); if (!k.ok) return err(k.error + ' Try again, or leave it empty to restore without the key.'); }
-      if (st.mode === 'replace' && localCount && !(await confirmDialog('Replace the data on this computer?', `The ${localCount} clients here and their visits will be replaced by the ${m.clients} clients of the backup. A safety copy is kept in the backups folder.`, 'Replace', true))) return;
+      if (st.mode === 'replace' && localCount && !(await confirmDialog('Replace the data on this computer?', `The ${localCount} clients here and their visits will be replaced by the ${m.clients} clients of the backup. A safety copy is kept in the backups folder.${window.SyncUI?.enabled() ? ' Phone sync is on: visits and clients your phones have that the backup does not are brought back here instead of being deleted on the phones.' : ''}`, 'Replace', true))) return;
       flushSave();
       const a = await window.api.applyBackup({ current: state.data.demo ? null : state.data });
       if (!a.ok) return err(a.error || 'The backup could not be restored.');
+      const wasRecovery = !!state.recovery;
+      // Replacing the data (or rebuilding it from nothing): phone sync must not see the half-way state, or the
+      // difference would be sent to the phones as deletions. It stays paused until the data is compared (rebase).
+      const needRebase = st.mode === 'replace' || wasRecovery;
+      if (needRebase) await window.SyncUI?.pause(true);
       state.recovery = null; // the backup is in; from now on the data can be saved
       close();
       let msg;
@@ -153,8 +158,10 @@ async function restoreBackup() {
       }
       if (a.keyMasked) { state.googleKey = { hasKey: true, masked: a.keyMasked }; msg += ' Google API key added.'; }
       else if (a.keyError) msg += ' Google API key not added: ' + a.keyError;
-      save(); renderAll(); fitAll();
+      await flushSave(); renderAll(); fitAll();
       toast(msg);
+      // The data was replaced (or rebuilt from nothing): phones and the sync copy may have newer things; bring them back, never delete them there.
+      if (needRebase) { await window.SyncUI?.rebase(); await window.SyncUI?.pause(false); }
       if (state.derived.pending.length) geocodeClients(state.derived.pending).then(afterLocate);
       else setTimeout(autoLookupGoogle, 800);
     },

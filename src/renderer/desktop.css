@@ -309,3 +309,20 @@ input[type=checkbox], input[type=radio] { min-height: 0; }
   .tab.active, .client-row.selected, .group.selected, .btn.primary { border: 1px solid Highlight; }
   .pin, .swatch, .tier, .gbadge { forced-color-adjust: none; }
 }
+
+/* Phone sync */
+.sync-chip { font: inherit; font-size: 11px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); cursor: pointer; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sync-chip[hidden] { display: none; }
+.sync-chip.idle { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+.sync-chip.syncing { color: var(--accent); }
+.sync-chip.offline { color: var(--due); }
+.sync-chip.error { color: var(--late); border-color: color-mix(in srgb, var(--late) 35%, transparent); }
+.sync-section .phone-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.sync-section .phone-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line-2); }
+.sync-section .phone-list small { display: block; color: var(--ink-3); font-size: 11px; }
+.sync-section .inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sync-pair { display: flex; gap: 14px; margin-top: 8px; flex-wrap: wrap; align-items: flex-start; }
+.sync-pair img { background: #fff; border: 1px solid var(--line); border-radius: 6px; flex: none; }
+.sync-pair > div { flex: 1 1 200px; min-width: 0; }
+.sync-pair textarea { width: 100%; box-sizing: border-box; font: 11px ui-monospace, Consolas, monospace; resize: none; word-break: break-all; }
+@media (max-width: 640px) { .sync-chip { max-width: 110px; } }

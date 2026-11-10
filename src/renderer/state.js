@@ -45,10 +45,11 @@ function save() {
   if (state.recovery) return; // saving now would overwrite the damaged file and the backups
   saveTimer = setTimeout(flushSave, 250);
 }
+// Resolves true once the data is written, false when saving is paused (recovery) or failed.
 function flushSave() {
   clearTimeout(saveTimer);
-  if (state.recovery) return;
-  window.api.saveData(state.data).catch(e => toast('Could not save: ' + e.message, { error: true }));
+  if (state.recovery) return Promise.resolve(false);
+  return window.api.saveData(state.data).then(() => true, e => { toast('Could not save: ' + e.message, { error: true }); return false; });
 }
 window.addEventListener('beforeunload', () => { if (saveTimer) flushSave(); });
 
@@ -56,64 +57,22 @@ window.addEventListener('beforeunload', () => { if (saveTimer) flushSave(); });
 // Derived values (visit status, group summaries)
 // =====================================================================
 // ---------- Visits ----------
-// A visit is { id, date, note, status: 'done' | 'planned' | 'cancelled', type: 'visit' | 'call', outcome, order? }.
-// Only done in-person visits where someone was met count as the "last visit".
-// A planned visit whose date has passed stays planned ("not confirmed") until it is marked done or cancelled.
-const VISIT_TYPES = { visit: 'Visit', call: 'Phone call' };
-const OUTCOMES = { '': 'No outcome', ok: 'Went well', order: 'Order taken', followup: 'Follow-up needed', absent: 'Nobody available', closed: 'Closed on arrival' };
-const NO_MEETING = new Set(['absent', 'closed']);
-const vStatus = v => v.status || (v.date > todayISO() ? 'planned' : 'done');
-const countsAsVisit = v => vStatus(v) === 'done' && (v.type || 'visit') === 'visit' && !NO_MEETING.has(v.outcome);
-function normalizeVisits(c) {
-  c.visits = (c.visits || []).filter(v => v && v.date);
-  for (const v of c.visits) {
-    if (!v.id) v.id = uid();
-    if (!v.status) v.status = v.date > todayISO() ? 'planned' : 'done';
-    if (!v.type) v.type = 'visit';
-    if (v.outcome === undefined) v.outcome = '';
-    if (v.note === undefined) v.note = '';
-  }
-  return c;
-}
-function lastVisit(c) {
-  const t = todayISO();
-  let best = null;
-  for (const v of c.visits || []) if (countsAsVisit(v) && v.date <= t && (!best || v.date > best)) best = v.date;
-  return best;
-}
-const plannedOf = c => (c.visits || []).filter(v => vStatus(v) === 'planned');
-function nextPlannedVisit(c) {
-  const t = todayISO();
-  let best = null;
-  for (const v of plannedOf(c)) if (v.date >= t && (!best || v.date < best)) best = v.date;
-  return best;
-}
+// Rules live in ../shared/visits.js (shared with the Android companion); these wrappers pass today's date and uid.
+const { VISIT_TYPES, OUTCOMES, NO_MEETING } = Visits;
+const vStatus = v => Visits.vStatus(v, todayISO());
+const countsAsVisit = v => Visits.countsAsVisit(v, todayISO());
+const normalizeVisits = c => Visits.normalizeVisits(c, todayISO(), uid);
+const lastVisit = c => Visits.lastVisit(c, todayISO());
+const plannedOf = c => Visits.plannedOf(c, todayISO());
+const nextPlannedVisit = c => Visits.nextPlannedVisit(c, todayISO());
 const unconfirmedOf = c => plannedOf(c).filter(v => v.date < todayISO());
 const doneToday = c => (c.visits || []).some(v => v.date === todayISO() && countsAsVisit(v));
 const plannedToday = c => plannedOf(c).some(v => v.date === todayISO() && (v.type || 'visit') === 'visit');
 
 // Records a visit. A visit marked done on a day when one was planned confirms that planned visit.
-function recordVisit(c, { date, note = '', type = 'visit', outcome = '', status, order } = {}) {
-  c.visits = c.visits || [];
-  const st = status || (date > todayISO() ? 'planned' : 'done');
-  if (st === 'done' && type === 'visit') { // a phone call doesn't confirm a planned visit
-    const p = c.visits.find(v => vStatus(v) === 'planned' && v.date === date && (v.type || 'visit') === type);
-    if (p) { Object.assign(p, { status: 'done', note: note || p.note || '', type, outcome, confirmedFrom: 'planned' }); return p; }
-  }
-  if (st === 'planned') {
-    const p = c.visits.find(v => vStatus(v) === 'planned' && v.date === date && (v.type || 'visit') === type);
-    if (p) { if (note) p.note = note; return p; }
-  }
-  const v = { id: uid(), date, note, type, outcome, status: st };
-  if (order !== undefined) v.order = order;
-  c.visits.push(v);
-  return v;
-}
+const recordVisit = (c, opts) => Visits.recordVisit(c, opts, todayISO(), uid);
 // Undo "mark done": a confirmed planned visit goes back to planned, any other is removed.
-function undoDone(c, v) {
-  if (v.confirmedFrom === 'planned') { v.status = 'planned'; v.outcome = ''; delete v.confirmedFrom; }
-  else c.visits = c.visits.filter(x => x !== v);
-}
+const undoDone = (c, v) => Visits.undoDone(c, v);
 
 // ---------- Priority (A/B/C) and visit status ----------
 const TIER_NAMES = { A: 'A — key client', B: 'B — regular', C: 'C — occasional' };

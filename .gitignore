@@ -19,7 +19,18 @@ clients*.json
 geocode-cache.json
 town-cache.json
 google.json
+sync.json
+sync-state.json
 backups/
+
+# Sync relay and Android: never commit server settings, relay data or signing keys
+server/config.php
+server/data/
+server/data-*/
+*.keystore
+*.jks
+*.apk
+*.aab
 
 # Secrets and local files
 .env

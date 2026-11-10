@@ -1,6 +1,7 @@
 // Actual Electron layout and keyboard checks, always with offline fictional demo data.
 const fs = require('node:fs');
 const path = require('node:path');
+const { ipcMain } = require('electron');
 
 module.exports = async function desktopUI(win, check, js) {
   const scale = Number(process.env.CLIENT_CLUSTERS_UI_SCALE || 1);
@@ -100,6 +101,92 @@ module.exports = async function desktopUI(win, check, js) {
     check(!$('.context-menu').hidden && $('.context-menu').contains(document.activeElement), 'context menu not keyboard reachable');
     key('Escape');
   `);
+  // ---- Phone sync settings, with the main-process side replaced by a stub ----
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
+  const sync = { enabled: false, phones: [{ id: 'a'.repeat(32), name: 'Fictional phone', lastSeen: 0 }], pauses: [], acks: [], answers: [], copies: 0, rekeys: 0 };
+  const status = () => ({ enabled: sync.enabled, url: 'https://example.test/sync/', state: sync.enabled ? 'idle' : 'off', error: null, lastSyncAt: Date.now(), paused: false });
+  const stubs = {
+    'sync:status': () => status(),
+    'sync:pause': (_e, p) => { sync.pauses.push(p); return status(); },
+    'sync:test': () => ({ ok: true, claimed: false }),
+    'sync:enable': (_e, o) => { if (!o.url || !o.setupCode) return { ok: false, error: 'missing' }; sync.enabled = true; return { ok: true, status: status() }; },
+    'sync:disable': () => { sync.enabled = false; return { ok: true, status: status() }; },
+    'sync:listPhones': () => ({ ok: true, phones: sync.phones }),
+    'sync:addPhone': () => ({ ok: true, qrDataUrl: PNG }), // the text of the code never goes to the window
+    'sync:copyPairing': () => { sync.copies++; return { ok: true, clearsInMs: 60000 }; },
+    'sync:clearPairing': () => true,
+    'sync:applied': (_e, id, ok) => { sync.acks.push([id, ok]); return true; },
+    'sync:confirmDeletes': (_e, answer) => { sync.answers.push(answer); return { ok: true, restored: answer === false ? 8 : 0 }; },
+    'sync:rekey': () => { sync.rekeys++; return { ok: true, status: status() }; },
+    'sync:revokePhone': () => ({ ok: true }),
+    'sync:now': () => ({ ok: true, ...status() }),
+  };
+  for (const [name, fn] of Object.entries(stubs)) { ipcMain.removeHandler(name); ipcMain.handle(name, fn); }
+  await js(`state.tab = 'groups'; renderAll(); settingsDialog();`); await settle();
+  await check('sync settings, off: address, setup code, test, turn on, help link', `
+    for (const sel of ['#sync-url', '#sync-code', '[data-sync="test"]', '[data-sync="enable"]', 'a[data-sync="help"]']) check($(sel), sel + ' missing');
+    check($('#sync-chip').hidden, 'sync chip visible while sync is off');
+    check($('#sync-section').getBoundingClientRect().right <= $('.modal-body').getBoundingClientRect().right + 1, 'sync section overflows');
+    $('#sync-url').value = 'https://example.test/sync/'; $('#sync-code').value = 'fictional-code';
+    $('[data-sync="enable"]').click();
+    for (let i = 0; i < 100 && !$('[data-sync="add"]'); i++) await new Promise(r => setTimeout(r, 20));
+    check($('[data-sync="add"]'), 'enabled state did not appear');
+  `);
+  await check('sync settings, on: status chip, phones list, Add a phone shows a loaded QR image', `
+    for (let i = 0; i < 100 && !$('.phone-list'); i++) await new Promise(r => setTimeout(r, 20));
+    check(/Fictional phone/.test($('.phone-list').textContent) && $('[data-sync="revoke"]'), 'phone list missing');
+    check(!$('#sync-chip').hidden && /Synced/.test($('#sync-chip').textContent), 'chip not showing Synced: ' + $('#sync-chip').textContent);
+    $('[data-sync="add"]').click(); $('#sync-name').value = 'Test phone'; $('[data-sync="create"]').click();
+    for (let i = 0; i < 100 && !$('.sync-pair img'); i++) await new Promise(r => setTimeout(r, 20));
+    const img = $('.sync-pair img'); check(img, 'QR image missing');
+    for (let i = 0; i < 100 && !img.complete; i++) await new Promise(r => setTimeout(r, 20));
+    check(img.naturalWidth > 0, 'QR image did not load (is data: allowed by the CSP?)');
+    check(!$('#sync-pair-code') && !/CCSYNC1/.test($('#sync-section').innerHTML), 'pairing code text is in the page');
+    check($('[data-sync="copy"]'), 'copy button missing');
+    $('[data-sync="copy"]').click(); await new Promise(r => setTimeout(r, 100));
+    check(/Anyone with this code can read your client data/.test($('#sync-section').textContent), 'warning missing');
+    const r = $('#modal-box').getBoundingClientRect(); check(r.right <= innerWidth && r.bottom <= innerHeight, 'dialog outside viewport');
+    check($('.modal-body').scrollWidth <= $('.modal-body').clientWidth + 1, 'sync pairing overflows horizontally');
+  `);
+  await capture('sync-settings');
+  await js('modalCtx.close();'); await settle();
+  await check('changes from the phone are merged, saved once and summarised', `
+    const c = state.data.clients[0], before = c.visits.length;
+    await SyncUI.incoming({ id: 41, ops: [{ k: 'visit', e: 'visit', id: 'phone-v1', c: c.id, t: 1, v: { id: 'phone-v1', date: '2026-11-09', status: 'done', type: 'visit', outcome: '', note: 'fictional' } },
+      { k: 'set', e: 'client', id: c.id, f: 'notes', v: 'phone note', t: 2 }] });
+    const c2 = state.data.clients[0]; // the merge works on a copy, so the object is a new one
+    check(c2.visits.length === before + 1 && c2.notes === 'phone note', 'ops not applied');
+    check([...document.querySelectorAll('.toast')].some(t => /From your phone: 1 visit, 1 note/.test(t.textContent)), 'summary toast missing');
+    await SyncUI.incoming({ id: 42, ops: [{ k: 'visit', e: 'visit', id: 'phone-v2', c: 'gone-client', t: 3, restore: true, cl: { name: 'Café Fictif' }, v: { id: 'phone-v2', date: '2026-11-09', status: 'done', type: 'visit', outcome: '', note: '' } }] });
+    check(state.data.clients.some(x => x.id === 'gone-client'), 'client not restored');
+    check([...document.querySelectorAll('.toast')].some(t => /Restored Café Fictif/.test(t.textContent)), 'restored toast missing');
+    state.data.clients = state.data.clients.filter(x => x.id !== 'gone-client'); c2.visits = c2.visits.filter(v => v.id !== 'phone-v1'); c2.notes = ''; renderAll();
+    $('#toasts').replaceChildren();
+  `);
+  await check('a merge that throws leaves the data untouched and is not acknowledged', `
+    const before = state.data, n = state.data.clients.length, orig = SyncOps.applyToData;
+    SyncOps.applyToData = d => { d.clients.length = 0; throw new Error('boom'); };
+    try { await SyncUI.incoming({ id: 43, ops: [{ k: 'set', e: 'client', id: 'x', f: 'notes', v: 'y', t: 1 }] }); } finally { SyncOps.applyToData = orig; }
+    check(state.data === before && state.data.clients.length === n, 'data was changed by a failed merge');
+    $('#toasts').replaceChildren();
+  `);
+  if (sync.acks.map(a => a.join(':')).join() !== '41:true,42:true,43:false') throw new Error('incoming changes must be acknowledged after saving: ' + JSON.stringify(sync.acks));
+  if (sync.copies !== 1) throw new Error('copy did not go through the main process');
+  await check('the deletion question offers the two answers and reports the choice', `
+    const p = SyncUI.confirmDeletes({ clients: 8, prospects: 0, visits: 21 });
+    await new Promise(r => setTimeout(r, 100));
+    check($('#modal-title').textContent === 'Also remove 8 clients / 21 visits from your phones?', 'title: ' + $('#modal-title').textContent);
+    const labels = [...document.querySelectorAll('#modal-box .modal-foot .btn')].map(b => b.textContent);
+    check(labels.includes('Remove from phones too') && labels.includes('Keep them (restore here)'), 'buttons: ' + labels);
+    [...document.querySelectorAll('#modal-box .modal-foot .btn')].find(b => /Keep them/.test(b.textContent)).click();
+    await p;
+    check($('#modal').hidden, 'dialog still open');
+    const q = SyncUI.confirmDeletes({ clients: 6, prospects: 0, visits: 0 });
+    await new Promise(r => setTimeout(r, 100));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await q;
+  `);
+  if (JSON.stringify(sync.answers) !== '[false,null]') throw new Error('answers: ' + JSON.stringify(sync.answers));
+  sync.enabled = false;
   await js(`appAppearance.set('light'); state.tab = 'planned'; renderAll(); renderDetail();`);
   await capture('planned');
   await js(`loadProspectDemo(); groupProspects(); state.tab = 'prospecting'; renderAll(); renderDetail();`);

@@ -1,0 +1,8 @@
+{
+  "appId": "com.clientclusters.companion",
+  "appName": "Client Clusters",
+  "webDir": "www",
+  "plugins": {
+    "CapacitorHttp": { "enabled": false }
+  }
+}

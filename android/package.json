@@ -1,0 +1,22 @@
+{
+  "name": "client-clusters-companion",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Client Clusters Android companion (Capacitor)",
+  "license": "MIT",
+  "author": "Maxime Vignals <contact@maximevignals.fr>",
+  "scripts": {
+    "copy-shared": "node scripts/copy-shared.cjs",
+    "sync": "node scripts/copy-shared.cjs && cap sync android",
+    "test": "node --test test/phone-ui.test.cjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/app-launcher": "^8.0.1",
+    "@capacitor/barcode-scanner": "^3.0.0",
+    "@capacitor/cli": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/filesystem": "^8.0.0"
+  }
+}

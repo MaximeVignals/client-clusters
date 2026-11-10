@@ -58,6 +58,7 @@ document.addEventListener('click', () => { $('#export-menu').hidden = true; });
 // Until the user chooses, nothing is saved (see save() in state.js), so the damaged file and backups stay safe.
 function startRecovery(info) {
   state.recovery = info;
+  window.SyncUI?.pause(true); // no phone changes are merged or sent while the data file is in question
   loadData({});
   recoveryDialog();
 }
@@ -74,9 +75,11 @@ function recoveryDialog() {
     {
       label: 'Start empty',
       async fn(close) {
-        if (!(await confirmDialog('Start with an empty list?', 'The app will start with no clients. You can still import a list or restore a backup later. The damaged file stays in the backups folder.', 'Start empty', true))) return;
+        if (!(await confirmDialog('Start with an empty list?', 'The app will start with no clients. You can still import a list or restore a backup later. The damaged file stays in the backups folder. If phone sync is on, clients and visits your phones still have are brought back here, not deleted there.', 'Start empty', true))) return;
         // Save at once: anything imported while the choice was pending has not been written yet.
-        state.recovery = null; close(); save(); renderAll();
+        state.recovery = null; close(); await flushSave(); renderAll();
+        // Phones and the sync copy may still have clients: they come back here instead of being deleted there.
+        await window.SyncUI?.rebase(); window.SyncUI?.pause(false);
       },
     },
     { label: 'Open a backup file…', fn(close) { close(); restoreBackup(); } },
@@ -90,7 +93,8 @@ function recoveryDialog() {
       let data;
       try { data = await window.api.restoreDailyBackup(b.file); } catch (e) { return err(e.message || 'That backup could not be restored.'); }
       state.recovery = null; close();
-      loadData(data); save(); fitAll();
+      loadData(data); await flushSave(); fitAll();
+      await window.SyncUI?.rebase(); window.SyncUI?.pause(false); // newer data on the phones is merged back, never deleted
       toast(`Backup of ${fmtDate(b.date)} restored: ${plural(state.data.clients.length, 'client')}.`);
       resumeBackgroundWork(1500);
     },
@@ -111,8 +115,10 @@ function recoveryDialog() {
 (async function init() {
   const data = await window.api.loadData();
   try { state.googleKey = await window.api.googleKeyStatus(); } catch { /* keep default */ }
+  window.SyncUI?.start();
   if (data && data.__error) { startRecovery(data); return; }
   loadData(data || {});
+  window.SyncUI?.pause(false); // data is in the window: phone sync may start
   fitAll();
   resumeBackgroundWork(1500);
 })();

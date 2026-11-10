@@ -1,0 +1,28 @@
+# Client Clusters relay: only index.php may be requested from the web.
+# Everything else (config.php with the setup code, data/, README, samples) is denied.
+Options -Indexes
+
+# Apache 2.4
+<IfModule mod_authz_core.c>
+  Require all denied
+  <Files "index.php">
+    Require all granted
+  </Files>
+</IfModule>
+
+# Apache 2.2 fallback
+<IfModule !mod_authz_core.c>
+  Order allow,deny
+  Deny from all
+  <Files "index.php">
+    Order allow,deny
+    Allow from all
+  </Files>
+</IfModule>
+
+# Some hosts (CGI/FastCGI) do not pass the Authorization header to PHP.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
