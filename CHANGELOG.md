@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.10.0 — unreleased
+## 1.10.0 — 2026-11-10
 
 ### Added
 
@@ -15,6 +15,11 @@
 
 - Sync is off by default; data file and backups are unchanged. Sync settings and keys are stored encrypted and never included in `.ccbackup` files.
 - Visit rules moved to `src/shared/visits.js`, shared with the Android app; behaviour unchanged.
+
+### Fixed (found by a code audit before release)
+
+- Changes arriving from a phone no longer interrupt work in progress: an address search, a Google lookup or an open dialog keeps writing into the data that is saved.
+- Prospect group numbers ("Group by proximity") are accepted by sync, so grouped prospects restored from a backup reach the phones.
 
 ## 1.9.2 — 2026-11-09
 

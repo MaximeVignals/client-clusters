@@ -369,8 +369,13 @@ test('phone ops about unknown entities leave no stamps', () => {
 test('everything the app itself produces passes validation', () => {
   const data = sampleData();
   data.clients.push({ id: 'c3', name: 'Bare', visits: [{ id: 'v5', date: '2026-10-02', status: 'planned', order: 1 }] }); // missing fields travel as null
+  data.prospecting.prospects.push({ id: 'p2', name: 'Grouped', status: 'visited', notes: '', extra: {}, group: 3 }); // "Group by proximity" stores a number
   const empty = { clients: {}, groups: {}, prospects: {}, settings: {} };
   const ops = SyncOps.diff(empty, SyncModel.project(data), clockAt('PC', 0, NOW));
   assert.ok(ops.length > 10);
   for (const op of ops) assert.ok(SyncOps.validateOp(op, 'PC', NOW), JSON.stringify(op));
+  const regroup = { k: 'set', e: 'prospect', id: 'p1', f: 'group', t: 1 };
+  assert.ok(SyncOps.validateOp({ ...regroup, v: 2 }, 'PC', NOW), 'a prospect group number is valid');
+  assert.ok(SyncOps.validateOp({ ...regroup, v: null }, 'PC', NOW), 'no group is valid');
+  for (const bad of [0, -1, 1.5, 1e6, {}, '<b>']) assert.equal(SyncOps.validateOp({ ...regroup, v: bad }, 'PC', NOW), null, JSON.stringify(bad));
 });

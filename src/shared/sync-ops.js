@@ -71,7 +71,9 @@
   const FIELD_OK = {
     name: v => isStr(v), address: v => isStr(v), postcode: v => isStr(v), city: v => isStr(v), country: v => isStr(v), notes: v => isStr(v),
     lat: v => v === null || (isNum(v) && Math.abs(v) <= 90), lng: v => v === null || (isNum(v) && Math.abs(v) <= 180),
-    groupId: idOrNull, group: idOrNull,
+    groupId: idOrNull,
+    // A prospect's group is its number ("Group by proximity" numbers them 1, 2, 3…), not the id of a client group.
+    group: v => idOrNull(v) || (Number.isSafeInteger(v) && v > 0 && v < 1e6),
     tier: v => v === null || v === '' || (typeof v === 'string' && /^[A-Za-z0-9]{1,8}$/.test(v)),
     extra: validExtra, gbp: validGbp,
     status: v => PROSPECT_STATUS.includes(v),

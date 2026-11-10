@@ -221,23 +221,30 @@ window.SyncUI = (function () {
     const ack = ok => { if (id !== undefined) api().syncApplied(id, ok).catch(() => {}); };
     if (state.recovery || !Array.isArray(ops)) return ack(false);
     if (!ops.length) return ack(true);
-    let res;
-    const before = state.data;
+    let res, snap = null, live = false;
+    const refuse = e => { toast('Could not merge the phone changes: ' + e.message, { error: true }); return ack(false); };
     try {
       await flushSave();
-      // Work on a copy: if anything throws, the data in the window is exactly what it was.
-      const copy = JSON.parse(JSON.stringify(state.data));
-      res = SyncOps.applyToData(copy, ops);
+      // Rehearse on a copy first: if the changes cannot be applied, the data in the window is exactly what it was.
+      snap = JSON.stringify(state.data);
+      const copy = JSON.parse(snap);
+      SyncOps.applyToData(copy, ops);
       copy.clients.forEach(normalizeVisits);
-      state.data = copy;
+      // Then apply to the data itself, keeping the same client objects: an address search, a Google lookup or an
+      // open dialog that holds a client must keep writing into the data that gets saved, not into a discarded copy.
+      live = true;
+      res = SyncOps.applyToData(state.data, ops);
+      state.data.clients.forEach(normalizeVisits);
       renderAll();
       if (state.selectedClientId && clientById(state.selectedClientId)) renderDetail();
       else if (state.selectedClientId) { state.selectedClientId = null; renderAll(); renderDetail(); }
     } catch (e) {
-      state.data = before;
-      try { renderAll(); renderDetail(); } catch { /* nothing more to do */ }
-      toast('Could not merge the phone changes: ' + e.message, { error: true });
-      return ack(false);
+      // Failed after the data was touched (it passed the rehearsal, so this is unexpected): go back to what it was.
+      if (live) {
+        state.data = JSON.parse(snap);
+        try { renderAll(); renderDetail(); } catch { /* nothing more to do */ }
+      }
+      return refuse(e);
     }
     const saved = await flushSave();
     ack(saved === true);

@@ -154,8 +154,10 @@ module.exports = async function desktopUI(win, check, js) {
     const c = state.data.clients[0], before = c.visits.length;
     await SyncUI.incoming({ id: 41, ops: [{ k: 'visit', e: 'visit', id: 'phone-v1', c: c.id, t: 1, v: { id: 'phone-v1', date: '2026-11-09', status: 'done', type: 'visit', outcome: '', note: 'fictional' } },
       { k: 'set', e: 'client', id: c.id, f: 'notes', v: 'phone note', t: 2 }] });
-    const c2 = state.data.clients[0]; // the merge works on a copy, so the object is a new one
+    const c2 = state.data.clients[0];
     check(c2.visits.length === before + 1 && c2.notes === 'phone note', 'ops not applied');
+    // A search or dialog that was holding the client when the changes arrived must still be writing into the live data.
+    check(c2 === c, 'the merge replaced the client object');
     check([...document.querySelectorAll('.toast')].some(t => /From your phone: 1 visit, 1 note/.test(t.textContent)), 'summary toast missing');
     await SyncUI.incoming({ id: 42, ops: [{ k: 'visit', e: 'visit', id: 'phone-v2', c: 'gone-client', t: 3, restore: true, cl: { name: 'Café Fictif' }, v: { id: 'phone-v2', date: '2026-11-09', status: 'done', type: 'visit', outcome: '', note: '' } }] });
     check(state.data.clients.some(x => x.id === 'gone-client'), 'client not restored');
