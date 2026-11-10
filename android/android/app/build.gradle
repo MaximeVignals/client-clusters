@@ -16,6 +16,22 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release signing: CC_ANDROID_SIGNING points to a properties file kept OUTSIDE the repo with
+    // storeFile, storePassword, keyAlias, keyPassword. Without it, release builds are unsigned.
+    def signingProps = System.getenv('CC_ANDROID_SIGNING')
+    if (signingProps && file(signingProps).exists()) {
+        def p = new Properties()
+        file(signingProps).withInputStream { p.load(it) }
+        signingConfigs {
+            release {
+                storeFile file(p['storeFile'])
+                storePassword p['storePassword']
+                keyAlias p['keyAlias']
+                keyPassword p['keyPassword']
+            }
+        }
+        buildTypes.release.signingConfig signingConfigs.release
+    }
     buildTypes {
         release {
             minifyEnabled false
