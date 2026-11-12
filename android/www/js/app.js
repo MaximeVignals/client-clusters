@@ -15,7 +15,7 @@ const App = (() => {
     //  drafts  = unsaved text, keyed 'notes:client:<id>' | 'notes:prospect:<id>' | 'log:<id>:<field>' | 'search:prospects'
   //            (notes drafts are { base, text, conflict? }: base = the stored note when editing began, see saveNotes)
     //  scroll  = scrollTop per region + destination + selection;  mapView = { lat, lng, zoom } (written by map.js)
-    ui: { sel: null, sheet: null, drafts: {}, scroll: {}, mapView: null, size: Layout.size(), pfilter: 'all', mapFilters: null, mapSheet: 'peek', hoursOpen: false, pairOpen: false, notesSaved: null },
+    ui: { sel: null, sheet: null, drafts: {}, scroll: {}, mapView: null, size: Layout.size(), pfilter: 'all', psort: 'name', pbusy: false, pgeoErr: '', mapFilters: null, mapSheet: 'peek', hoursOpen: false, pairOpen: false, notesSaved: null },
     appearance: 'system', fatal: null, booted: false,
   };
   let toastTimer = null, toastLeft = 0, toastStart = 0, modalResolve = null, modalOpener = null, sheetKey = '', sheetOpener = null, liveState = null, mapSelKey = '';
@@ -524,6 +524,8 @@ const App = (() => {
         if (q) { q.status = prev; await commit(); }
       });
     },
+    'psort': el => sortProspects(el.dataset.v),
+    'prefresh': () => locateProspects(true),
     'pfilter': el => { app.ui.pfilter = el.dataset.v; refreshProspectList(); },
     'clear-search': () => { delete drafts['search:prospects']; const i = $('#psearch'); if (i) { i.value = ''; i.focus({ preventScroll: true }); } refreshProspectList(); },
     'navigate': el => openExternal(el.dataset.url),
@@ -546,11 +548,38 @@ const App = (() => {
   }
   function focusNotesHeading() { const h = $('#h-notes'); if (h) h.focus({ preventScroll: true }); }
 
+  // Prospect sort. "Distance" needs the phone position (asked once, kept in memory only by Geo). Any failure goes back to "Nom"
+  // with the reason written under the switch; the app works fully without location.
+  let psortReq = 0;   // latest choice: a position that arrives for an older request changes nothing
+  async function locateProspects(fresh) {
+    const tok = ++psortReq, ae = document.activeElement;
+    const again = !!ae && ae.dataset.act === 'prefresh';   // the button is replaced while waiting
+    app.ui.pbusy = true; app.ui.pgeoErr = ''; refreshProspectList();
+    const live = $('#pgeo-live'); if (live) live.textContent = T.geo.locating;
+    let err = null;
+    try { await Geo.get({ fresh }); } catch (e) { err = Geo.message(e && e.kind); }
+    if (tok !== psortReq) return;   // the user chose Nom or tapped again meanwhile
+    app.ui.pbusy = false;
+    if (err) { app.ui.psort = 'name'; app.ui.pgeoErr = err; } else app.ui.psort = 'dist';
+    refreshProspectList();
+    const live2 = $('#pgeo-live'); if (live2) live2.textContent = '';
+    if (err && app.tab === 'prospects') toast(err);
+    if (again) { const b = $(err ? '#psortbar [data-act=psort][data-v=dist]' : '#psortbar [data-act=prefresh]'); if (b) b.focus({ preventScroll: true }); }
+  }
+  function sortProspects(v) {
+    if (v === 'dist') { if (app.ui.psort !== 'dist') locateProspects(false); return; }
+    psortReq++; app.ui.pbusy = false; app.ui.psort = 'name'; app.ui.pgeoErr = ''; refreshProspectList();
+  }
+
   // Prospect list: chips and rows are redrawn in place (the search field keeps focus and its text).
   function refreshProspectList() {
     const chips = $('#pchips'), list = $('#plist');
     if (!chips || !list) return;
     const focused = document.activeElement && chips.contains(document.activeElement) ? document.activeElement.dataset.v : null;
+    const bar = $('#psortbar'), ae = document.activeElement;
+    const barKey = bar && ae && bar.contains(ae) ? `[data-act="${ae.dataset.act}"]${ae.dataset.v ? `[data-v="${ae.dataset.v}"]` : ''}` : null;
+    if (bar) bar.innerHTML = Views.prospectSort();
+    if (barKey) { const b = bar.querySelector(barKey); if (b) b.focus({ preventScroll: true }); }
     chips.innerHTML = Views.prospectChips();
     list.innerHTML = Views.prospectRows(app.draftOr('search:prospects', ''));
     if (focused) { const b = chips.querySelector(`[data-v="${focused}"]`); if (b) b.focus({ preventScroll: true }); }

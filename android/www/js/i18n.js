@@ -94,6 +94,18 @@ const T = (() => {
       see: 'Voir sur la carte',
       emptyFilters: 'Rien ne correspond à ces filtres.', emptyView: 'Déplacez ou zoomez la carte pour voir d’autres éléments.',
     },
+    // Position: sort of the prospect list, "Me localiser" on the map
+    geo: {
+      sortBy: 'Trier par', byName: 'Nom', byDistance: 'Distance', refresh: 'Actualiser', locating: 'Recherche de la position…',
+      takenAt: t => `Position prise à ${t}`, noPos: n => `Sans position (${n})`,
+      locate: 'Me localiser', here: 'Vous êtes ici',
+      errors: {
+        denied: 'Autorisez la localisation dans les réglages Android pour trier par distance.',
+        off: 'Activez la localisation du téléphone.',
+        timeout: 'Position introuvable, réessayez.',
+        unavailable: 'Position introuvable, réessayez.',
+      },
+    },
     // Empty and error states
     empty: {
       clients: 'Aucun client sur ce téléphone.', clientsHint: 'Vos clients arriveront du PC à la prochaine synchro.',

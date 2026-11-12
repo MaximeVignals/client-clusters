@@ -204,18 +204,40 @@ const Views = (() => {
       + Object.entries(PROSPECT_STATUS).map(([k, m]) => chip(k, m.label, list.filter(p => statusKey(p) === k).length, `<span class="gl ${m.cls}" aria-hidden="true">${ic(m.glyph)}</span>`)).join('');
   }
 
+  // Sort switch under the search field: "Nom" (grouped by status) or "Distance" (one flat list from the phone position).
+  const sortMode = () => (App.ui.psort === 'dist' && Geo.last() ? 'dist' : 'name');
+  function prospectSort() {
+    const m = sortMode(), busy = !!App.ui.pbusy, pos = Geo.last();
+    const btn = (v, label) => `<button type="button" data-act="psort" data-v="${v}" aria-pressed="${m === v}" class="${m === v ? 'on' : ''}">${esc(label)}</button>`;
+    let line = '';
+    if (busy) line = `<p class="geo-line">${ic('i-spinner', 'spin')}<span>${esc(T.geo.locating)}</span></p>`;
+    else if (m === 'dist' && pos) line = `<p class="geo-line">${ic('i-locate')}<span>${esc(T.geo.takenAt(T.fmtTime(pos.at)))}</span><button type="button" class="btn sm sec" data-act="prefresh">${esc(T.geo.refresh)}</button></p>`;
+    else if (App.ui.pgeoErr) line = `<p class="geo-line err">${ic('i-alert')}<span>${esc(App.ui.pgeoErr)}</span></p>`;
+    return `<div class="seg psort" role="group" aria-label="${esc(T.geo.sortBy)}">${btn('name', T.geo.byName)}${btn('dist', T.geo.byDistance)}</div>${line}`;
+  }
+
+  const prospectRow = (p, key, meta, dist) => `<button type="button" class="row row-p${isSel('prospect', p.id) ? ' sel' : ''}" data-act="open-prospect" data-id="${esc(p.id)}"${isSel('prospect', p.id) ? ' aria-current="true"' : ''}>${diamond(key)}<span class="grow"><span class="name">${esc(p.name)}</span>`
+    + `<span class="sub">${esc(p.city || town(p) || p.address || '')}</span><span class="sub stext ${meta.cls}">${esc(meta.label)}</span></span>${dist ? `<span class="dist tnum">${esc(dist)}</span>` : ''}</button>`;
+
   function prospectRows(q) {
     const all = Object.values(App.proj.prospects);
     if (!all.length) return empty(T.empty.prospects, T.empty.prospectsHint, syncBtn);
     const match = prospectMatcher(q), f = App.ui.pfilter || 'all';
     let h = '';
-    for (const [key, meta] of Object.entries(PROSPECT_STATUS)) {
-      if (f !== 'all' && f !== key) continue;
-      const items = all.filter(p => statusKey(p) === key && match(p)).sort(byName);
-      if (!items.length) continue;
-      if (f === 'all') h += `<h2>${esc(meta.label)} (${items.length})</h2>`;
-      h += items.map(p => `<button type="button" class="row row-p${isSel('prospect', p.id) ? ' sel' : ''}" data-act="open-prospect" data-id="${esc(p.id)}"${isSel('prospect', p.id) ? ' aria-current="true"' : ''}>${diamond(key)}<span class="grow"><span class="name">${esc(p.name)}</span>`
-        + `<span class="sub">${esc(p.city || town(p) || p.address || '')}</span><span class="sub stext ${meta.cls}">${esc(meta.label)}</span></span></button>`).join('');
+    if (sortMode() === 'dist') {
+      const here = Geo.last(), shown = all.filter(p => (f === 'all' || statusKey(p) === f) && match(p));
+      const withPos = shown.filter(U.hasLoc).map(p => ({ p, d: Geo.distance(here, { lat: p.lat, lng: p.lng }) })).sort((a, b) => a.d - b.d || byName(a.p, b.p));
+      const without = shown.filter(p => !U.hasLoc(p)).sort(byName);
+      h += withPos.map(({ p, d }) => prospectRow(p, statusKey(p), PROSPECT_STATUS[statusKey(p)], Geo.fmt(d))).join('');
+      if (without.length) h += `<h2>${esc(T.geo.noPos(without.length))}</h2>` + without.map(p => prospectRow(p, statusKey(p), PROSPECT_STATUS[statusKey(p)], '')).join('');
+    } else {
+      for (const [key, meta] of Object.entries(PROSPECT_STATUS)) {
+        if (f !== 'all' && f !== key) continue;
+        const items = all.filter(p => statusKey(p) === key && match(p)).sort(byName);
+        if (!items.length) continue;
+        if (f === 'all') h += `<h2>${esc(meta.label)} (${items.length})</h2>`;
+        h += items.map(p => prospectRow(p, key, meta, '')).join('');
+      }
     }
     if (h) return h;
     if ((q || '').trim()) return empty(`Aucun prospect ne correspond à ${T.q(q.trim())}.`, '', `<button type="button" class="btn sec" data-act="clear-search">Effacer la recherche</button>`);
@@ -226,6 +248,7 @@ const Views = (() => {
     if (!Object.keys(App.proj.prospects).length) return prospectRows('');   // nothing to search or filter
     return `<div class="sticky" id="pbar"><label class="sr" for="psearch">Rechercher un prospect</label>
       <input type="search" id="psearch" placeholder="Rechercher un prospect" autocomplete="off" value="${esc(pq())}">
+      <div id="psortbar">${prospectSort()}</div><p id="pgeo-live" class="sr" role="status" aria-live="polite"></p>
       <div class="chips" id="pchips" role="group" aria-label="Filtrer par statut">${prospectChips()}</div></div><div id="plist">${prospectRows(pq())}</div>`;
   }
 
@@ -278,7 +301,7 @@ const Views = (() => {
         <p class="muted small">Scannez le code d’un autre PC ou collez-le ici. Cela remplace l’appairage actuel.</p>${pairControls()}</details>
       <button type="button" class="btn danger-text full" data-act="disconnect">Déconnecter ce téléphone</button>
       <p class="muted small">Supprime les données stockées sur ce téléphone, y compris les changements pas encore envoyés au PC. Vos données sur le PC ne sont pas touchées.</p></section>
-      <section class="group" aria-labelledby="h-about"><h2 id="h-about">À propos</h2><p class="muted">Client Clusters Android 1.1.0</p></section>`;
+      <section class="group" aria-labelledby="h-about"><h2 id="h-about">À propos</h2><p class="muted">Client Clusters Android 1.2.0</p></section>`;
   }
 
   // ---------- Accueil / Déconnecté ----------
@@ -388,5 +411,5 @@ const Views = (() => {
     return '';
   }
 
-  return { PROSPECT_STATUS, statusKey, diamond, syncPill, today, client, prospects, prospectChips, prospectRows, prospect, settings, welcome, disconnected, fatal, isEmptyProject, hasClients, emptyClients, bar, fab, detailEmpty, mapList, plannedToday, sheet, pickerRows, pendingVisit, groupColor, empty };
+  return { PROSPECT_STATUS, statusKey, diamond, syncPill, today, client, prospects, prospectChips, prospectRows, prospectSort, prospect, settings, welcome, disconnected, fatal, isEmptyProject, hasClients, emptyClients, bar, fab, detailEmpty, mapList, plannedToday, sheet, pickerRows, pendingVisit, groupColor, empty };
 })();

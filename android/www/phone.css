@@ -160,6 +160,13 @@ textarea { min-height: 7rem; resize: vertical; }
 .fchip[aria-pressed="true"] .cnt { color: inherit; }
 .fchip .gl { display: inline-flex; color: var(--tone); }
 .fchip .gl .ic { width: 1.125rem; height: 1.125rem; }
+/* sort switch (Nom / Distance) and the position line under the search field */
+.seg.psort { margin: var(--s-2) 0 0; max-width: 20rem; }
+.geo-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-2) 0 0; font-size: var(--t-small); color: var(--c-ink-2); }
+.geo-line .ic { width: 1.125rem; height: 1.125rem; }
+.geo-line .btn { margin-left: auto; }
+.geo-line.err { color: var(--c-danger); }
+.row .dist { flex: none; align-self: center; white-space: nowrap; font-size: var(--t-small); font-weight: var(--w-semi); color: var(--c-ink-2); }
 .st-todo { --tone: var(--st-todo); --tone-soft: var(--st-todo-soft); } .st-visited { --tone: var(--st-visited); --tone-soft: var(--st-visited-soft); }
 .st-converted { --tone: var(--st-converted); --tone-soft: var(--st-converted-soft); } .st-no { --tone: var(--st-lost); --tone-soft: var(--st-lost-soft); }
 /* prospect diamond: rotated square, glyph kept upright */

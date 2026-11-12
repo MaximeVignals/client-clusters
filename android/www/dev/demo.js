@@ -2,6 +2,7 @@
 // Active only when ALL hold: URL has demo=1, not a native Capacitor app, no androidBridge, and http: protocol
 // (the Android app serves https://localhost). Otherwise this file does nothing at all.
 // Extra dev params: &sync=ok|busy|offline|error|disconnected   &state=loading|empty|fatal
+//   &pos=43.3,-0.37  (fake phone position for "prospects near me" and "Me localiser")
 //   &font=2  (text at 200%, like the system font scale)   &tiles=off  (no map background: shows the offline map chip)
 (function () {
   'use strict';
@@ -137,5 +138,5 @@
   };
   // &font=2: root text size 200%, to check that nothing clips or overlaps (all text sizes are rem).
   if (params.get('font') === '2' && document.documentElement) document.documentElement.style.fontSize = '200%';
-  w.__DEMO__ = { sync: forced, state: STATE, tiles: params.get('tiles') === 'off' ? 'off' : '' };
+  w.__DEMO__ = { sync: forced, state: STATE, tiles: params.get('tiles') === 'off' ? 'off' : '', pos: params.get('pos') || '' };
 })();

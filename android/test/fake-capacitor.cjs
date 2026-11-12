@@ -60,6 +60,13 @@ function sampleData() {
 
 window.__opened = [];
 
+// Fake Geolocation plugin: tests change perm ('granted' | 'prompt' | 'denied'), services (false = location switched off) and pos.
+// posHigh, when set, is what a high-accuracy request returns. calls lists what the app asked for.
+const geo = { perm: 'granted', services: true, pos: { latitude: 45.7612, longitude: 4.8423, accuracy: 30 }, posHigh: null, calls: [], reqArgs: [], reqError: '', lowFail: '', delay: 20 };
+const gerr = code => Object.assign(new Error(code), { code });
+// perm 'coarse' = approximate location granted only
+const geoPerm = () => (geo.perm === 'coarse' ? { location: 'prompt', coarseLocation: 'granted' } : { location: geo.perm, coarseLocation: geo.perm });
+
 window.Capacitor = {
   isNativePlatform: () => true,
   Plugins: {
@@ -84,12 +91,23 @@ window.Capacitor = {
       async addListener(name, fn) { (appListeners[name] = appListeners[name] || []).push(fn); return { remove: async () => {} }; },
       async exitApp() {},
     },
+    Geolocation: {
+      async checkPermissions() { geo.calls.push('check'); if (!geo.services) throw gerr('OS-PLUG-GLOC-0007'); return geoPerm(); },
+      async requestPermissions(a) { geo.calls.push('request'); geo.reqArgs.push((a && a.permissions) || []); if (geo.reqError) throw gerr(geo.reqError); if (!geo.services) throw gerr('OS-PLUG-GLOC-0007'); if (geo.perm === 'prompt') geo.perm = 'granted'; return geoPerm(); },
+      async getCurrentPosition(o) {
+        geo.calls.push(o && o.enableHighAccuracy ? 'pos-high' : 'pos');
+        await new Promise(r => setTimeout(r, geo.delay));
+        if (geo.lowFail && !(o && o.enableHighAccuracy)) throw gerr(geo.lowFail);   // e.g. no network fix (GPS only)
+        const c = o && o.enableHighAccuracy && geo.posHigh ? geo.posHigh : geo.pos;
+        return { timestamp: Date.now(), coords: Object.assign({ altitude: null, altitudeAccuracy: null, speed: null, heading: null }, c) };
+      },
+    },
     CapacitorBarcodeScanner: { async scanBarcode() { return { ScanResult: window.__test.scanText }; } },
   },
 };
 
 window.__test = {
-  files, relay, scanText: '', appListeners,
+  files, relay, scanText: '', appListeners, geo,
   pairingCode(extra) {
     return 'CCSYNC1.' + b64url(JSON.stringify(Object.assign({ url: 'https://relay.example.test/index.php', token: 'phone-token', key: this.key, name: 'Test PC', deviceId: 'phone-dev', pcDeviceId: 'pc-dev' }, extra)));
   },

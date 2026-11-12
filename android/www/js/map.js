@@ -3,7 +3,7 @@
 'use strict';
 
 const PhoneMap = (() => {
-  let map = null, group = null, homeLayer = null, homeSig = '', fitted = false, shown = false;
+  let map = null, group = null, homeLayer = null, meLayer = null, locating = false, homeSig = '', fitted = false, shown = false;
   // The first view is fitted to the data by code ("auto"), once the container has a real size. It is refitted only when the
   // container changes size (never on a data change), until the user pans or zooms or a selection moves the map; only from
   // then on is the view remembered as the user's (App.ui.mapView).
@@ -397,6 +397,45 @@ const PhoneMap = (() => {
     try { cl.spiderfy(); } catch (e) { try { cl.zoomToBounds(); } catch (err) { /* ignore */ } }
   }
 
+  // ---------- "Me localiser" ----------
+  function addLocateControl() {
+    const Ctl = L.Control.extend({
+      options: { position: 'topright' },
+      onAdd() {
+        const box = L.DomUtil.create('div', 'leaflet-bar leaflet-control map-locate-box');
+        const b = L.DomUtil.create('button', 'map-locate', box);
+        b.type = 'button'; b.id = 'map-locate'; b.setAttribute('aria-label', T.geo.locate); b.title = T.geo.locate;
+        b.innerHTML = Icon.svg('i-locate');
+        L.DomEvent.disableClickPropagation(box);
+        L.DomEvent.on(b, 'click', ev => { L.DomEvent.stop(ev); locate(); });
+        return box;
+      },
+    });
+    new Ctl().addTo(map);
+  }
+  function showMe(pos) {
+    meLayer.clearLayers();
+    const ll = [pos.lat, pos.lng];
+    if (pos.accuracy > 0) meLayer.addLayer(L.circle(ll, { radius: pos.accuracy, interactive: false, className: 'me-acc' }));
+    meLayer.addLayer(L.marker(ll, { interactive: false, keyboard: false, zIndexOffset: 1000, icon: L.divIcon({ className: 'me-wrap', html: `<div class="me-dot" role="img" aria-label="${U.esc(T.geo.here)}"></div>`, iconSize: [18, 18], iconAnchor: [9, 9] }) }));
+  }
+  async function locate() {
+    if (!map || locating) return;
+    locating = true;
+    const btn = $('#map-locate');
+    if (btn) btn.setAttribute('aria-busy', 'true');
+    try {
+      const pos = await Geo.get({ fresh: true });
+      if (App.tab !== 'map' || !visible()) return;   // left the map while waiting: nothing to draw on a hidden map
+      showMe(pos);
+      if (!filters().prospects) toggle('prospects');   // same path (and saving) as a tap on the Prospects chip; a no-op while "Prévues aujourd’hui" is on
+      auto = false; fitted = true;   // the view is now the user's: a later size change must not refit
+      const z = Math.max(map.getZoom(), 13);
+      run(() => map.setView([pos.lat, pos.lng], z, { animate: !reduced() }));
+    } catch (e) { if (App.tab === 'map' && visible()) App.toast(Geo.message(e && e.kind)); }
+    finally { locating = false; if (btn) btn.removeAttribute('aria-busy'); }
+  }
+
   // ---------- map ----------
   function init() {
     if (map) return;
@@ -418,6 +457,7 @@ const PhoneMap = (() => {
     const layersCtl = L.control.layers(base, null, { position: 'topright' }).addTo(map);
     const toggleEl = layersCtl.getContainer().querySelector('.leaflet-control-layers-toggle');
     if (toggleEl) { toggleEl.setAttribute('aria-label', T.map.layers); toggleEl.title = T.map.layers; }
+    addLocateControl();
     map.on('baselayerchange', e => { try { localStorage.setItem('basemap', e.name); } catch (err) { /* ignore */ } });
     // If the chosen background keeps failing (offline or service down), switch to the other one once.
     // Offline there is nothing to switch to: a small chip over the map says so (the markers stay on a neutral background).
@@ -476,6 +516,7 @@ const PhoneMap = (() => {
     group.on('animationend', markParent);
     group.addTo(map);
     homeLayer = L.layerGroup().addTo(map);
+    meLayer = L.layerGroup().addTo(map);   // the phone position: its own layer, never part of the clusters
     // Space activates a marker or cluster like a tap (Enter is handled by the marker and by the cluster group).
     map.getContainer().addEventListener('keydown', ev => {
       const el = ev.target;

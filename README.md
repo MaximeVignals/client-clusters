@@ -125,6 +125,10 @@ Client Clusters has an Android companion for the field: today's planned visits, 
 (tap to call, *Navigate*), logging visits, marking planned visits done or didn't happen, client notes,
 and prospect status and notes. Importing, grouping, Google hours, planning and exports stay on Windows.
 
+Nearby prospects: on the phone, *Prospects → Distance* lists prospects nearest first, and *Me localiser* on
+the map shows where you are. The phone's position is read only when you tap one of these, is kept in memory,
+and is never saved or synced. Android asks for location the first time; approximate location is enough.
+
 The phone and the PC sync through a small relay you host yourself on any PHP 8 web hosting with HTTPS
 (cheap shared hosting is enough, no database). Everything is encrypted on your devices before it leaves
 them: the relay only stores unreadable data, and the key never reaches it.

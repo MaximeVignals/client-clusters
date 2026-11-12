@@ -23,6 +23,11 @@
 .leaflet-control-attribution { font-size: .75rem; }
 #mapview[data-os="sheet"] .leaflet-bottom { bottom: var(--peek); }   /* attribution stays above the peeking sheet */
 
+/* "Me localiser": same size and look as the layers button above it (Leaflet draws that one white in both themes) */
+.map-locate { display: block; width: var(--tap); height: var(--tap); padding: 0; border: 2px solid rgba(0, 0, 0, .2); border-radius: 5px; background: #fff; color: #1B2421; box-shadow: none; background-clip: padding-box; }
+.map-locate .ic { display: block; margin: auto; width: 1.625rem; height: 1.625rem; }
+.map-locate[aria-busy="true"] { color: #2B5BA8; }
+.map-locate:focus-visible { outline: 3px solid var(--c-ink); outline-offset: 2px; }
 /* ---------- markers ---------- */
 .mk-wrap, .mc-wrap { display: grid; place-items: center; background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .mk-wrap:focus, .mc-wrap:focus { outline: none; }
@@ -45,6 +50,11 @@
 /* cluster: surface disc, count in ink, 4px ring split by share of clients (primary) and prospects (blue) */
 .mc { width: var(--sz); height: var(--sz); box-sizing: border-box; display: grid; place-items: center; border-radius: 50%; background: conic-gradient(var(--c-primary) 0 var(--pc), var(--st-todo) var(--pc) 100%); box-shadow: var(--e-2); }
 .mc-n { width: calc(100% - 8px); height: calc(100% - 8px); display: grid; place-items: center; border-radius: 50%; background: var(--c-surface); color: var(--c-ink); font-size: 15px; font-weight: var(--w-bold); font-variant-numeric: tabular-nums; }
+
+/* "you are here": dot + accuracy circle, in their own layer (blue like the prospect tone; ring keeps it visible on any tile) */
+.me-wrap { background: none; border: 0; }
+.me-dot { width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; background: var(--st-todo); border: 3px solid var(--c-map-ring); box-shadow: 0 0 0 1px var(--c-map-home), 0 1px 4px var(--c-shadow-strong); }
+path.me-acc { fill: var(--st-todo); fill-opacity: .14; stroke: var(--st-todo); stroke-width: 1.5; stroke-opacity: .6; }
 
 /* home marker (not clustered) */
 .hm { width: 1.625rem; height: 1.625rem; border-radius: 50%; background: var(--c-map-home); color: var(--c-map-home-ink); display: grid; place-items: center; border: 2px solid var(--c-map-ring); }

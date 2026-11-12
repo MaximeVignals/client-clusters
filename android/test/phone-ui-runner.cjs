@@ -205,6 +205,176 @@ app.whenReady().then(async () => {
     await until(() => /Visité \\(1\\)/i.test(text()), 'moved to Visité');
   `);
 
+  // Near-me tests: made-up prospects are added in memory only (never committed) and removed again at the end of each test group.
+  const geoSetup = `
+    const addProspects = () => {
+      Object.assign(App.proj.prospects, {
+        n2: { id: 'n2', name: 'Zeta Proche', city: 'Lyon', lat: 45.7692, lng: 4.8423, status: 'todo' },
+        n3: { id: 'n3', name: 'Alpha Moyen', city: 'Lyon', lat: 45.8012, lng: 4.8423, status: 'visited' },
+        n4: { id: 'n4', name: 'Beta Loin', city: 'Paris', lat: 48.85, lng: 2.35, status: 'todo' },
+        n5: { id: 'n5', name: 'Gamma Sans Position', city: 'Nulle part', status: 'todo' },
+      });
+      delete App.ui.drafts['search:prospects'];   // the earlier test left 'cafe' in the search field
+      App.render();
+    };
+    const dropProspects = () => { for (const id of ['n2', 'n3', 'n4', 'n5']) delete App.proj.prospects[id]; App.ui.psort = 'name'; App.ui.pfilter = 'all'; App.ui.pgeoErr = ''; delete App.ui.drafts['search:prospects']; App.render(); };
+    const names = () => [...document.querySelectorAll('#plist .row .name')].map(n => n.textContent);
+    const heads = () => [...document.querySelectorAll('#plist h2')].map(n => n.textContent.trim());
+  `;
+
+  await check('Prospects: Nom stays the default and asks for no position', `${geoSetup}
+    __test.geo.calls.length = 0;
+    click('#tabs [data-tab=prospects]');
+    addProspects();
+    await until(() => document.querySelector('#psortbar .seg'), 'sort switch');
+    const name = document.querySelector('[data-act=psort][data-v=name]'), dist = document.querySelector('[data-act=psort][data-v=dist]');
+    check(name.getAttribute('aria-pressed') === 'true' && dist.getAttribute('aria-pressed') === 'false', 'Nom should be pressed by default');
+    check(heads().some(h => /À contacter \\(/.test(h)) && heads().some(h => /Visité \\(/.test(h)), 'status headings missing: ' + heads());
+    check(!document.querySelector('#plist .dist'), 'no distances in Nom mode');
+    check(__test.geo.calls.length === 0, 'location was asked without a tap: ' + __test.geo.calls);
+  `);
+
+  await check('Prospects: Distance gives one flat list, nearest first, with French distance labels', `${geoSetup}
+    check(Geo.fmt(850) === '850 m' && Geo.fmt(854) === '850 m' && Geo.fmt(2300) === '2,3 km' && Geo.fmt(9940) === '9,9 km' && Geo.fmt(12400) === '12 km' && Geo.fmt(996) === '1,0 km', 'formatter: ' + [Geo.fmt(850), Geo.fmt(2300), Geo.fmt(12400), Geo.fmt(996)]);
+    click('[data-act=psort][data-v=dist]');
+    await until(() => document.querySelector('[data-act=psort][data-v=dist]').getAttribute('aria-pressed') === 'true', 'Distance pressed');
+    check(__test.geo.calls.includes('check') && __test.geo.calls.filter(c => c === 'pos').length === 1, 'one position request expected: ' + __test.geo.calls);
+    const order = names();
+    check(order[0] === 'Zeta Proche' && order.indexOf('Alpha Moyen') > order.indexOf('Zeta Proche') && order.indexOf('Beta Loin') > order.indexOf('Alpha Moyen'), 'nearest first expected: ' + order);
+    check(order[order.length - 1] === 'Gamma Sans Position', 'no-position prospect must be last: ' + order);
+    check(heads().length === 1 && /^Sans position \\(1\\)$/.test(heads()[0]), 'only the Sans position heading expected: ' + heads());
+    const labels = [...document.querySelectorAll('#plist .row .dist')].map(n => n.textContent);
+    check(labels.length === order.length - 1 && /^\\d+ m$/.test(labels[0]) && /^\\d,\\d km$/.test(labels[1]) && /^\\d+ km$/.test(labels[labels.length - 1]), 'distance labels: ' + labels);
+    const line = document.querySelector('#psortbar .geo-line').textContent;
+    check(/Position prise à \\d\\d:\\d\\d/.test(line) && document.querySelector('[data-act=prefresh]'), 'position line / Actualiser missing: ' + line);
+    check(!/45\\.7612/.test(JSON.stringify(Object.assign({}, localStorage)) + [...__test.files.values()].join('')), 'the position must not be stored');
+    // Actualiser fetches again, and concurrent callers share one request
+    const before = __test.geo.calls.filter(c => c === 'pos').length;
+    const a = Geo.get({ fresh: true }), b = Geo.get();
+    check(a === b, 'concurrent calls should share one promise');
+    await a;
+    check(__test.geo.calls.filter(c => c === 'pos').length === before + 1, 'shared request should hit the plugin once');
+    __test.geo.pos = { latitude: 45.7612, longitude: 4.8423, accuracy: 30 };
+    click('[data-act=prefresh]');
+    await until(() => __test.geo.calls.filter(c => c === 'pos').length === before + 2, 'refresh asks again');
+    await until(() => !App.ui.pbusy && document.querySelector('[data-act=prefresh]'), 'refresh done');
+  `);
+
+  await check('Prospects: status chip and search still filter in Distance mode', `${geoSetup}
+    click('[data-act=pfilter][data-v=visited]');
+    await until(() => names().includes('Alpha Moyen') && !names().includes('Zeta Proche'), 'visited only: ' + names());
+    check(heads().length === 0 || heads().every(h => /^Sans position/.test(h)), 'no status headings in Distance mode: ' + heads());
+    click('[data-act=pfilter][data-v=all]');
+    await until(() => names().includes('Zeta Proche'), 'all again');
+    const s = document.querySelector('#psearch'); s.value = 'beta'; s.dispatchEvent(new Event('input', { bubbles: true }));
+    check(names().length === 1 && names()[0] === 'Beta Loin', 'search should filter: ' + names());
+    s.value = 'gamma'; s.dispatchEvent(new Event('input', { bubbles: true }));
+    check(names().length === 1 && heads().length === 1, 'no-position prospect found by search: ' + names() + heads());
+    s.value = ''; s.dispatchEvent(new Event('input', { bubbles: true }));
+    click('[data-act=psort][data-v=name]');
+    await until(() => heads().some(h => /À contacter/.test(h)) && !document.querySelector('#plist .dist'), 'back to Nom');
+    check(document.querySelector('[data-act=psort][data-v=name]').getAttribute('aria-pressed') === 'true', 'Nom pressed again');
+  `);
+
+  await check('Prospects: a coarse first fix is retried once with high accuracy and the better one is kept', `${geoSetup}
+    __test.geo.pos = { latitude: 45.7612, longitude: 4.8423, accuracy: 900 };
+    __test.geo.posHigh = { latitude: 45.7615, longitude: 4.8425, accuracy: 20 };
+    __test.geo.calls.length = 0;
+    const p = await Geo.get({ fresh: true });
+    check(p.accuracy === 20 && __test.geo.calls.join() === 'check,pos,pos-high', 'got ' + p.accuracy + ' / ' + __test.geo.calls);
+    __test.geo.pos = { latitude: 45.7612, longitude: 4.8423, accuracy: 30 }; __test.geo.posHigh = null;
+  `);
+
+  await check('Geolocation: when the network fix fails, precise location falls back to GPS; coarse-only reports the failure', `${geoSetup}
+    __test.geo.lowFail = 'OS-PLUG-GLOC-0010'; __test.geo.posHigh = { latitude: 45.7615, longitude: 4.8425, accuracy: 5 };
+    __test.geo.calls.length = 0;
+    const p = await Geo.get({ fresh: true });
+    check(p.accuracy === 5 && __test.geo.calls.join() === 'check,pos,pos-high', 'GPS fallback: ' + __test.geo.calls);
+    __test.geo.perm = 'coarse'; __test.geo.calls.length = 0;
+    let kind = '';
+    try { await Geo.get({ fresh: true }); } catch (e) { kind = e.kind; }
+    check(kind === 'timeout' && __test.geo.calls.join() === 'check,pos', 'coarse-only failure: ' + kind + ' / ' + __test.geo.calls);
+    __test.geo.perm = 'granted'; __test.geo.lowFail = ''; __test.geo.posHigh = null;
+  `);
+
+  await check('Geolocation: one permission request for both aliases; a coarse-only grant never retries or re-prompts', `${geoSetup}
+    __test.geo.pos = { latitude: 45.7612, longitude: 4.8423, accuracy: 900 };
+    __test.geo.posHigh = { latitude: 45.7615, longitude: 4.8425, accuracy: 20 };
+    __test.geo.perm = 'coarse'; __test.geo.calls.length = 0; __test.geo.reqArgs.length = 0;
+    const c = await Geo.get({ fresh: true });
+    check(c.accuracy === 900 && __test.geo.calls.join() === 'check,pos', 'coarse-only should keep the coarse fix, got ' + c.accuracy + ' / ' + __test.geo.calls);
+    __test.geo.perm = 'prompt'; __test.geo.calls.length = 0;
+    const d = await Geo.get({ fresh: true });
+    check(__test.geo.calls.join() === 'check,request,pos,pos-high' && d.accuracy === 20, 'prompt flow: ' + __test.geo.calls);
+    check(__test.geo.reqArgs.length === 1 && __test.geo.reqArgs[0].join() === 'location,coarseLocation', 'one request for both aliases: ' + JSON.stringify(__test.geo.reqArgs));
+    __test.geo.perm = 'granted'; __test.geo.pos = { latitude: 45.7612, longitude: 4.8423, accuracy: 30 }; __test.geo.posHigh = null;
+  `);
+
+  await check('Prospects: choosing Nom while a position is pending is not overridden when it arrives', `${geoSetup}
+    App.ui.psort = 'name'; App.render();
+    __test.geo.delay = 200;
+    click('[data-act=psort][data-v=dist]');
+    await until(() => App.ui.pbusy, 'fetch pending');
+    click('[data-act=psort][data-v=name]');
+    check(!App.ui.pbusy && App.ui.psort === 'name', 'Nom should apply at once');
+    await sleep(450);
+    __test.geo.delay = 20;
+    check(App.ui.psort === 'name' && document.querySelector('[data-act=psort][data-v=name]').getAttribute('aria-pressed') === 'true', 'late position must not switch to Distance');
+    check(!document.querySelector('#plist .dist'), 'list should stay grouped by status');
+  `);
+
+  await check('Prospects: a refused request to enable location counts as off, not denied', `${geoSetup}
+    __test.geo.perm = 'prompt'; __test.geo.reqError = 'OS-PLUG-GLOC-0009';
+    click('[data-act=psort][data-v=dist]');
+    await until(() => /Activez la localisation du téléphone/.test(document.querySelector('#toast').textContent), 'off toast: ' + document.querySelector('#toast').textContent);
+    check(!/Autorisez/.test(document.querySelector('#psortbar').textContent), 'must not say denied');
+    __test.geo.perm = 'granted'; __test.geo.reqError = '';
+    await until(() => !App.ui.pbusy, 'idle');
+  `);
+
+  await check('Prospects: a refused permission or switched-off location falls back to Nom and says why', `${geoSetup}
+    App.ui.psort = 'name'; App.render();
+    __test.geo.perm = 'denied';
+    click('[data-act=psort][data-v=dist]');
+    await until(() => /Autorisez la localisation dans les réglages Android/.test(document.querySelector('#toast').textContent), 'denied toast: ' + document.querySelector('#toast').textContent);
+    await until(() => !App.ui.pbusy, 'not busy');
+    check(document.querySelector('[data-act=psort][data-v=name]').getAttribute('aria-pressed') === 'true' && document.querySelector('[data-act=psort][data-v=dist]').getAttribute('aria-pressed') === 'false', 'should stay on Nom');
+    check(heads().some(h => /À contacter/.test(h)) && !document.querySelector('#plist .dist'), 'list should still be grouped by status');
+    check(/Autorisez la localisation/.test(document.querySelector('#psortbar').textContent), 'message should stay under the switch');
+    __test.geo.perm = 'granted'; __test.geo.services = false;
+    click('[data-act=psort][data-v=dist]');
+    await until(() => /Activez la localisation du téléphone/.test(document.querySelector('#toast').textContent + document.querySelector('#psortbar').textContent), 'off message');
+    await until(() => !App.ui.pbusy, 'not busy 2');
+    check(App.ui.psort === 'name', 'still Nom');
+    __test.geo.services = true;
+    dropProspects();
+  `);
+
+  await check('Map: Me localiser shows the position in its own layer, centres on it and turns Prospects on', `
+    __test.geo.calls.length = 0;
+    click('#tabs [data-tab=map]');
+    await until(() => !document.querySelector('#mapview').hidden && document.querySelector('#map-locate'), 'locate button');
+    const btn = document.querySelector('#map-locate');
+    check(btn.getAttribute('aria-label') === 'Me localiser' && btn.tagName === 'BUTTON', 'accessible name missing');
+    const chip = document.querySelector('#maptools [data-f=prospects]');
+    check(chip.getAttribute('aria-pressed') === 'false' && localStorage.getItem('showProspects') !== '1', 'prospects should start off');
+    btn.click();
+    await until(() => document.querySelector('#map .me-dot') && document.querySelector('#map path.me-acc'), 'position dot and accuracy circle');
+    await until(() => chip.getAttribute('aria-pressed') === 'true' && localStorage.getItem('showProspects') === '1', 'prospects turned on and saved');
+    const m = PhoneMap.map;
+    await until(() => Math.abs(m.getCenter().lat - 45.7612) < 0.001 && Math.abs(m.getCenter().lng - 4.8423) < 0.001 && m.getZoom() >= 13, 'map centred on the position: ' + JSON.stringify(m.getCenter()) + ' z' + m.getZoom());
+    check(!document.querySelector('#map .mk-wrap-client .me-dot') && !document.querySelector('#map .marker-cluster .me-dot'), 'dot must not be inside a cluster or marker');
+    await until(() => document.querySelector('#map .mk-wrap-prospect') || document.querySelector('#map .mc'), 'prospects drawn');
+    check(!btn.hasAttribute('aria-busy'), 'busy flag should clear');
+    // a refused permission only shows the message; the map keeps working
+    __test.geo.perm = 'denied';
+    btn.click();
+    await until(() => /Autorisez la localisation/.test(document.querySelector('#toast').textContent), 'denied toast on the map');
+    __test.geo.perm = 'granted';
+    click('#maptools [data-f=prospects]');
+    await until(() => localStorage.getItem('showProspects') === '0', 'prospects off again');
+  `);
+
   await check('Sync now pushes the outbox and the PC receives the phone changes', `
     click('#tabs [data-tab=settings]');
     await until(() => /Test PC/.test(text()), 'settings');
