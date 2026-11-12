@@ -1,0 +1,152 @@
+/* Medium (600-840dp) and expanded (>840dp) layouts. Loaded after phone.css, which holds the compact layout.
+   The DOM is the same in every size class (no node is moved or recreated); only grid areas and visibility change, so a
+   fold/unfold keeps scroll, focus, drafts and the map (only the navigation changes place in the DOM, to keep tab order = visual order). <body data-lay> comes from app.js compute():
+     single = one pane (settings, welcome, errors)   list = medium: list | detail   map = medium: map (+ docked detail)
+     x = expanded: list | map over detail (also used with a hinge or tabletop fold)
+   <body data-sel="1"> means an item is selected, <body data-fab="1"> that the "Noter une visite" button is shown. */
+
+:root[data-size="medium"], :root[data-size="expanded"] { --rail-w: max(80px, 5.5rem); --list-w: clamp(260px, 38%, 340px); --detail-x: calc(var(--rail-w) + var(--list-w)); }
+:root[data-size="expanded"] { --list-w: 360px; }
+
+/* ---------- grid ---------- */
+:root:not([data-size="compact"]) body {
+  display: grid;
+  grid-template-columns: var(--rail-w) var(--list-w) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "rail top top" "rail list detail" "rail list actions";
+}
+:root:not([data-size="compact"]) #top { grid-area: top; min-width: 0; }
+:root:not([data-size="compact"]) #tabs { grid-area: rail; }
+:root:not([data-size="compact"]) #view { grid-area: list; }
+:root:not([data-size="compact"]) #detail { grid-area: detail; }
+:root:not([data-size="compact"]) #mapview { grid-area: map; margin: 0; isolation: isolate; }
+:root:not([data-size="compact"]) #actions { grid-area: actions; }
+:root:not([data-size="compact"]) #fab { grid-area: list; }
+/* the compact bars are position: fixed (phone.css); here they are grid items */
+:root:not([data-size="compact"]) #tabs, :root:not([data-size="compact"]) #fab, :root:not([data-size="compact"]) #actions { position: static; }
+
+/* panes */
+:root:not([data-size="compact"]) #view,
+:root:not([data-size="compact"]) #detail { padding: var(--s-4) var(--s-4) var(--s-5); }
+/* room under the last row for the extended FAB: its height (measured, --fab-h) + its margin + 16px */
+:root:not([data-size="compact"]) body[data-fab="1"] #view { padding-bottom: calc(var(--fab-h) + var(--s-4) * 2 + var(--inset-bottom)); }
+:root:not([data-size="compact"]) #detail,
+:root:not([data-size="compact"]) #mapview,
+:root:not([data-size="compact"]) #actions { border-left: 1px solid var(--c-line); }
+:root:not([data-size="compact"]) #detail { background: var(--c-bg); }
+/* one row at normal text size (primary, secondary, then the icon buttons); it may wrap to two rows when the text is scaled up. Left/right padding stays phone.css's (it includes the insets). */
+:root:not([data-size="compact"]) #actions { flex-wrap: wrap; padding-top: var(--s-3); padding-bottom: calc(var(--s-3) + var(--inset-bottom)); box-shadow: none; border-top: 1px solid var(--c-line); }
+:root:not([data-size="compact"]) #actions .btn { white-space: nowrap; padding-left: var(--s-3); padding-right: var(--s-3); }
+:root:not([data-size="compact"]) #actions .btn.grow { flex: 1 1 0; min-width: min-content; }
+:root:not([data-size="compact"]) #actions .btn.icon { flex: none; padding: 0; }
+:root:not([data-size="compact"]) #detail .placeholder { min-height: 100%; }
+
+/* extended FAB: "Noter une visite", bottom right of the list pane */
+:root:not([data-size="compact"]) #fab { align-self: end; justify-self: end; z-index: 20; margin: 0 var(--s-4) calc(var(--s-4) + var(--inset-bottom)) 0; padding: 0; background: none; box-shadow: none; pointer-events: none; }
+:root:not([data-size="compact"]) #fab .btn { pointer-events: auto; width: auto; min-height: 56px; border-radius: var(--r-l); padding: 0 var(--s-5) 0 var(--s-4); box-shadow: var(--e-3); }
+
+/* navigation rail: 80dp, icons + labels, same four destinations */
+:root:not([data-size="compact"]) #tabs { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: var(--s-2); width: var(--rail-w); min-height: 0; overflow-x: hidden; overflow-y: auto; padding: var(--s-3) 0 calc(var(--s-3) + var(--inset-bottom)); border-top: 0; border-right: 1px solid var(--c-line); }
+:root:not([data-size="compact"]) #tabs button { flex: none; flex-direction: column; justify-content: flex-start; gap: var(--s-1); min-height: 4rem; min-width: 0; padding: var(--s-1) 2px; }
+:root:not([data-size="compact"]) #tabs .ti { width: min(4rem, 100%); height: 2rem; }
+:root:not([data-size="compact"]) #back { display: none; }
+
+/* one pane: settings, pairing, errors */
+:root:not([data-size="compact"]) body[data-lay="single"] { grid-template-columns: var(--rail-w) minmax(0, 1fr); grid-template-areas: "rail top" "rail list" "rail actions"; }
+:root:not([data-size="compact"]) body[data-lay="single"]:not([data-mode="app"]) { grid-template-columns: 0 minmax(0, 1fr); }
+:root:not([data-size="compact"]) body[data-lay="single"] #view { padding-left: max(var(--s-4), calc((100% - 36rem) / 2)); padding-right: max(var(--s-4), calc((100% - 36rem) / 2)); }
+:root:not([data-size="compact"]) body[data-lay="single"] #actions { border-left: 0; }
+
+/* medium, Carte: map beside the rail; a selected item docks on the right */
+:root[data-size="medium"] body[data-lay="map"] { grid-template-columns: var(--rail-w) minmax(0, 1fr); grid-template-areas: "rail top" "rail map" "rail map"; }
+:root[data-size="medium"] body[data-lay="map"][data-sel="1"] { grid-template-columns: var(--rail-w) minmax(0, 1fr) minmax(320px, 360px); grid-template-areas: "rail top top" "rail map detail" "rail map actions"; --detail-x: calc(100% - 360px); }
+
+/* expanded: list | map over detail */
+:root:not([data-size="compact"]) body[data-lay="x"] {
+  grid-template-rows: auto minmax(240px, 45fr) minmax(0, 55fr) auto;
+  grid-template-areas: "rail top top" "rail list map" "rail list detail" "rail list actions";
+}
+:root:not([data-size="compact"]) body[data-lay="x"] #detail { border-top: 1px solid var(--c-line); border-left: 1px solid var(--c-line); }
+
+/* landscape and short (phone-sized height): map | detail side by side when each gets at least 360dp ... */
+@media (min-aspect-ratio: 1/1) and (max-height: 699.98px) and (min-width: 1160px) {
+  :root:not([data-size="compact"]) body[data-lay="x"] {
+    grid-template-columns: var(--rail-w) var(--list-w) minmax(360px, 1fr) minmax(360px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "rail top top top" "rail list map detail" "rail list map actions";
+    --detail-x: calc(var(--rail-w) + var(--list-w) + (100% - var(--rail-w) - var(--list-w)) / 2);
+  }
+  :root:not([data-size="compact"]) body[data-lay="x"] #detail { border-top: 0; }
+}
+/* ... otherwise the detail overlays the map as a docked sheet (only while an item is selected) */
+@media (min-aspect-ratio: 1/1) and (max-height: 699.98px) and (max-width: 1159.98px) {
+  :root:not([data-size="compact"]) body[data-lay="x"] {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "rail top top" "rail list map" "rail list actions";
+  }
+  :root:not([data-size="compact"]) body[data-lay="x"] #detail { grid-area: map; align-self: end; max-height: 70%; z-index: 700; border: 0; border-radius: var(--r-l) var(--r-l) 0 0; box-shadow: var(--e-3); }
+  :root:not([data-size="compact"]) body[data-lay="x"][data-sel="0"] #detail { display: none; }
+}
+
+/* medium and narrower than ~710dp: the detail would get under 360dp, so it docks over the list (or the map) instead of
+   sitting beside it (opaque, full height of its region, so nothing shows through); the back button (hidden in the other wide layouts) closes it, like Android back. */
+@media (min-width: 600px) and (max-width: 709.98px) {
+  :root[data-size="medium"] body[data-lay="list"] { grid-template-columns: var(--rail-w) minmax(0, 1fr); grid-template-areas: "rail top" "rail list" "rail actions"; --detail-x: var(--rail-w); }
+  :root[data-size="medium"] body[data-lay="map"], :root[data-size="medium"] body[data-lay="map"][data-sel="1"] { grid-template-columns: var(--rail-w) minmax(0, 1fr); grid-template-areas: "rail top" "rail map" "rail actions"; --detail-x: var(--rail-w); }
+  :root[data-size="medium"] body[data-lay="list"] #detail, :root[data-size="medium"] body[data-lay="map"] #detail { align-self: stretch; max-height: none; z-index: 700; border: 0; border-radius: 0; background: var(--c-bg); box-shadow: var(--e-3); }
+  :root[data-size="medium"] body[data-lay="list"] #detail { grid-area: list; }
+  :root[data-size="medium"] body[data-lay="map"] #detail { grid-area: map; }
+  :root[data-size="medium"] body[data-lay="list"][data-sel="0"] #detail { display: none; }
+  :root[data-size="medium"] body[data-lay="list"] #actions, :root[data-size="medium"] body[data-lay="map"] #actions { border-left: 0; }
+  :root[data-size="medium"] body[data-lay="list"] #back, :root[data-size="medium"] body[data-lay="map"] #back { display: grid; }
+}
+
+/* start-up skeleton and loading: no rail yet */
+:root:not([data-size="compact"]) body[data-mode="loading"] { grid-template-columns: 0 minmax(0, 1fr); grid-template-areas: "rail top" "rail list" "rail actions"; }
+:root:not([data-size="compact"]) body[data-mode="loading"] #view { padding-left: max(var(--s-4), calc((100% - 36rem) / 2)); padding-right: max(var(--s-4), calc((100% - 36rem) / 2)); }
+
+/* ---------- foldables (Viewport Segments API, progressive enhancement) ---------- */
+/* Two side-by-side screens: rail + list in the left segment, map/detail in the right one, the hinge column stays empty. */
+@media (horizontal-viewport-segments: 2) {
+  :root:not([data-size="compact"]) body[data-lay="x"] {
+    grid-template-columns: var(--rail-w) calc(env(viewport-segment-right 0 0, 50vw) - var(--rail-w)) calc(env(viewport-segment-left 1 0, 50vw) - env(viewport-segment-right 0 0, 50vw)) minmax(0, 1fr);
+    grid-template-rows: auto minmax(240px, 45fr) minmax(0, 55fr) auto;
+    grid-template-areas: "rail top . map" "rail list . map" "rail list . detail" "rail list . actions";
+    --detail-x: env(viewport-segment-left 1 0, 50vw);
+  }
+  :root:not([data-size="compact"]) body[data-lay="x"] #detail { display: block; grid-area: detail; align-self: stretch; max-height: none; z-index: auto; border-top: 1px solid var(--c-line); border-left: 0; border-radius: 0; box-shadow: none; }
+  :root:not([data-size="compact"]) body[data-lay="x"] #mapview, :root:not([data-size="compact"]) body[data-lay="x"] #actions { border-left: 0; }
+  :root:not([data-size="compact"]) body[data-lay="single"] { grid-template-columns: var(--rail-w) calc(env(viewport-segment-right 0 0, 100vw) - var(--rail-w)); }
+  :root:not([data-size="compact"]) body[data-lay="single"]:not([data-mode="app"]) { grid-template-columns: 0 env(viewport-segment-right 0 0, 100vw); }
+}
+/* Tabletop (half folded, horizontal fold): map in the top segment; rail, list and detail in the bottom one. */
+@media (vertical-viewport-segments: 2) {
+  :root:not([data-size="compact"]) body[data-lay="x"] {
+    grid-template-columns: var(--rail-w) var(--list-w) minmax(0, 1fr);
+    grid-template-rows: env(viewport-segment-bottom 0 0, 50vh) calc(env(viewport-segment-top 0 1, 50vh) - env(viewport-segment-bottom 0 0, 50vh)) auto minmax(0, 1fr) auto;
+    grid-template-areas: "map map map" ". . ." "rail top top" "rail list detail" "rail list actions";
+    --detail-x: calc(var(--rail-w) + var(--list-w));
+  }
+  :root:not([data-size="compact"]) body[data-lay="x"] #detail { display: block; grid-area: detail; align-self: stretch; max-height: none; z-index: auto; border-top: 0; border-left: 1px solid var(--c-line); border-radius: 0; box-shadow: none; }
+  :root:not([data-size="compact"]) body[data-lay="x"] #mapview { border-left: 0; }
+  :root:not([data-size="compact"]) .sheet { max-height: calc(100% - env(viewport-segment-top 0 1, 50%)); }
+}
+
+/* Carte with nothing open (expanded): app.js hides the detail, the map takes the whole right pane */
+:root:not([data-size="compact"]) body[data-lay="x"][data-screen="map"][data-sel="0"], :root:not([data-size="compact"]) body[data-lay="x"][data-empty="1"][data-sel="0"] { grid-template-areas: "rail top top" "rail list map" "rail list map" "rail list actions"; }
+@media (min-aspect-ratio: 1/1) and (max-height: 699.98px) and (min-width: 1160px) {
+  :root:not([data-size="compact"]) body[data-lay="x"][data-screen="map"][data-sel="0"], :root:not([data-size="compact"]) body[data-lay="x"][data-empty="1"][data-sel="0"] { grid-template-areas: "rail top top top" "rail list map map" "rail list map map"; }
+}
+@media (min-aspect-ratio: 1/1) and (max-height: 699.98px) and (max-width: 1159.98px) {
+  :root:not([data-size="compact"]) body[data-lay="x"][data-screen="map"][data-sel="0"], :root:not([data-size="compact"]) body[data-lay="x"][data-empty="1"][data-sel="0"] { grid-template-areas: "rail top top" "rail list map" "rail list actions"; }
+}
+@media (horizontal-viewport-segments: 2) {
+  :root:not([data-size="compact"]) body[data-lay="x"][data-screen="map"][data-sel="0"], :root:not([data-size="compact"]) body[data-lay="x"][data-empty="1"][data-sel="0"] { grid-template-areas: "rail top . map" "rail list . map" "rail list . map" "rail list . map"; }
+}
+
+/* ---------- sheets: a dialog-like panel anchored to the bottom of the detail pane ---------- */
+:root:not([data-size="compact"]) .sheet { left: var(--detail-x); right: 0; margin: 0 auto; width: min(34rem, calc(100% - var(--detail-x))); max-height: 85%; }
+
+/* ---------- snackbar: over the detail/list area, clear of the action bar and the FAB ---------- */
+:root:not([data-size="compact"]) #snackbar { left: calc(var(--rail-w) + var(--s-3) + var(--inset-left)); right: auto; width: min(34rem, calc(100% - var(--rail-w) - var(--s-5) - var(--inset-left) - var(--inset-right))); bottom: calc(var(--s-4) + var(--inset-bottom) + var(--actions-h)); }
+:root:not([data-size="compact"]) body[data-fab="1"] #snackbar { bottom: calc(var(--s-4) + var(--inset-bottom) + var(--fab-h) + var(--s-3)); }

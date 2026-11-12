@@ -1,0 +1,131 @@
+/* Design tokens, direction "balisage" (trail waymarks / IGN map).
+   Loaded before phone.css. Colours: every text pair meets WCAG AA (4.5:1). */
+
+/* ---------- fonts (Atkinson Hyperlegible Next, OFL, see vendor/fonts/LICENSE) ---------- */
+@font-face { font-family: 'Atkinson Hyperlegible Next'; font-style: normal; font-display: swap; font-weight: 400;
+  src: url(../vendor/fonts/atkinson-hyperlegible-next-latin-ext-400-normal.woff2) format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Atkinson Hyperlegible Next'; font-style: normal; font-display: swap; font-weight: 400;
+  src: url(../vendor/fonts/atkinson-hyperlegible-next-latin-400-normal.woff2) format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Atkinson Hyperlegible Next'; font-style: normal; font-display: swap; font-weight: 600;
+  src: url(../vendor/fonts/atkinson-hyperlegible-next-latin-ext-600-normal.woff2) format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Atkinson Hyperlegible Next'; font-style: normal; font-display: swap; font-weight: 600;
+  src: url(../vendor/fonts/atkinson-hyperlegible-next-latin-600-normal.woff2) format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family: 'Atkinson Hyperlegible Next'; font-style: normal; font-display: swap; font-weight: 700;
+  src: url(../vendor/fonts/atkinson-hyperlegible-next-latin-ext-700-normal.woff2) format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: 'Atkinson Hyperlegible Next'; font-style: normal; font-display: swap; font-weight: 700;
+  src: url(../vendor/fonts/atkinson-hyperlegible-next-latin-700-normal.woff2) format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+
+/* ---------- light (default) ---------- */
+:root {
+  --c-bg: #F3F6F4; --c-surface: #FFFFFF; --c-surface-2: #E7EDEA;
+  --c-line: #C9D3CF;          /* hairline dividers (decorative) */
+  --c-line-strong: #78857F;   /* control borders, 3:1 on surface/bg/surface-2 */
+  --c-ink: #1B2421; --c-ink-2: #4A5752;
+  --c-primary: #1F6F5C; --c-on-primary: #FFFFFF;
+  --c-primary-soft: #D5E9E1; --c-on-primary-soft: #0F3D31;
+  --c-mark: #F2C230; --c-on-mark: #1B2421; --c-mark-soft: #FCEFC4;  /* waymark yellow: today / planned only */
+  --c-scrim: rgb(0 0 0 / .5);
+  --c-map-ring: #FFFFFF; --c-map-home: #111111; --c-map-home-ink: #FFFFFF;  /* map markers sit on tiles: same in both themes */
+  --c-shadow: rgb(0 0 0 / .14); --c-shadow-strong: rgb(0 0 0 / .22);
+
+  --st-todo: #2B5BA8;      --st-todo-soft: #DDE7F6;
+  --st-visited: #6B48A6;   --st-visited-soft: #E8E0F4;
+  --st-converted: #1F6F5C; --st-converted-soft: #D5E9E1;
+  --st-lost: #5A6561;      --st-lost-soft: #F3F5F4;
+  --c-on-status: #FFFFFF;  /* glyph/text on a filled --st-* colour */
+
+  --c-ok: #1E6B3A;     --c-ok-soft: #D8EEDF;
+  --c-warn: #8A5300;   --c-warn-soft: #F8E6C6;
+  --c-danger: #B3261E; --c-danger-soft: #F7DAD7;
+  --c-info: #2B5BA8;   --c-info-soft: #DDE7F6;
+
+  --font: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  --t-caption: .8125rem; --t-small: .9375rem; --t-body: 1rem;
+  --t-title-s: 1.125rem; --t-title: 1.375rem; --t-display: 1.75rem;
+  --lh-body: 1.45; --lh-title: 1.2;
+  --w-regular: 400; --w-semi: 600; --w-bold: 700;
+
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px; --s-7: 48px;
+  --r-xs: 4px; --r-s: 8px; --r-m: 14px; --r-l: 24px; --r-pill: 999px;
+
+  --e-0: none;
+  --e-1: 0 1px 0 var(--c-line);
+  --e-2: 0 4px 14px var(--c-shadow);
+  --e-3: 0 10px 32px var(--c-shadow-strong);
+
+  --tap: 48px;
+  --top-h: 56px; --nav-h: 80px;   /* compact app bar and bottom navigation (insets are added on top) */
+  --focus: 3px solid var(--c-primary);
+  --focus-offset: 2px;
+  --dur: 160ms;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --pressed: rgb(0 0 0 / .08);   /* pressed-state tint laid over any surface */
+
+  --inset-top: env(safe-area-inset-top, 0px);
+  --inset-right: env(safe-area-inset-right, 0px);
+  --inset-bottom: env(safe-area-inset-bottom, 0px);
+  --inset-left: env(safe-area-inset-left, 0px);
+
+  color-scheme: light;
+}
+
+/* ---------- dark ---------- */
+:root[data-theme="dark"] {
+  --c-bg: #121917; --c-surface: #1A2320; --c-surface-2: #232E2A;
+  --c-line: #33403B; --c-line-strong: #71827B;
+  --c-ink: #E4EBE8; --c-ink-2: #A7B4AF;
+  --c-primary: #72C6AB; --c-on-primary: #0B2A21;
+  --c-primary-soft: #1E3B32; --c-on-primary-soft: #BFE8DA;
+  --c-mark: #F2C230; --c-on-mark: #1B2421; --c-mark-soft: #3A3218;
+  --c-scrim: rgb(0 0 0 / .62);
+  --c-shadow: rgb(0 0 0 / .3); --c-shadow-strong: rgb(0 0 0 / .4);
+  --st-todo: #8DB3EE;      --st-todo-soft: #1D2C45;
+  --st-visited: #BCA3E8;   --st-visited-soft: #2E2444;
+  --st-converted: #72C6AB; --st-converted-soft: #1E3B32;
+  --st-lost: #A9B4B0;      --st-lost-soft: #2B3330;
+  --c-on-status: #101714;
+  --c-ok: #72CC92;     --c-ok-soft: #1C3626;
+  --c-warn: #EAAE45;   --c-warn-soft: #3D2E12;
+  --c-danger: #F4908A; --c-danger-soft: #442221;
+  --c-info: #8DB3EE;   --c-info-soft: #1D2C45;
+  --pressed: rgb(255 255 255 / .09);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --c-bg: #121917; --c-surface: #1A2320; --c-surface-2: #232E2A;
+    --c-line: #33403B; --c-line-strong: #71827B;
+    --c-ink: #E4EBE8; --c-ink-2: #A7B4AF;
+    --c-primary: #72C6AB; --c-on-primary: #0B2A21;
+    --c-primary-soft: #1E3B32; --c-on-primary-soft: #BFE8DA;
+    --c-mark: #F2C230; --c-on-mark: #1B2421; --c-mark-soft: #3A3218;
+    --c-scrim: rgb(0 0 0 / .62);
+    --c-shadow: rgb(0 0 0 / .3); --c-shadow-strong: rgb(0 0 0 / .4);
+    --st-todo: #8DB3EE;      --st-todo-soft: #1D2C45;
+    --st-visited: #BCA3E8;   --st-visited-soft: #2E2444;
+    --st-converted: #72C6AB; --st-converted-soft: #1E3B32;
+    --st-lost: #A9B4B0;      --st-lost-soft: #2B3330;
+    --c-on-status: #101714;
+    --c-ok: #72CC92;     --c-ok-soft: #1C3626;
+    --c-warn: #EAAE45;   --c-warn-soft: #3D2E12;
+    --c-danger: #F4908A; --c-danger-soft: #442221;
+    --c-info: #8DB3EE;   --c-info-soft: #1D2C45;
+    --pressed: rgb(255 255 255 / .09);
+    color-scheme: dark;
+  }
+}
+
+/* ---------- motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur: 0ms; }
+  *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}
+
+/* ---------- utilities ---------- */
+.tnum { font-variant-numeric: tabular-nums; }

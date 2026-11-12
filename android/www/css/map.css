@@ -1,0 +1,91 @@
+/* Map: markers, clusters, filter chips, "Sur la carte" list and bottom sheet. Loaded last. Uses tokens.css only.
+   Markers: shape + colour + glyph (never colour alone). The 48px Leaflet icon box is the touch target; the visual sits inside it. */
+
+#mapview { --peek: max(72px, 4.5rem); flex: 1; position: relative; overflow: hidden; min-height: 0; min-width: 0; margin-bottom: var(--dock-h); isolation: isolate; }
+#map { position: absolute; inset: 0; }
+/* no tiles (offline, failed): markers stay readable on a neutral background */
+#map.leaflet-container { background: var(--c-surface-2); font: inherit; }
+
+/* dark theme: tone the tiles down, markers are unaffected. The filter is on each tile image, not on the whole tile pane:
+   a filter on the pane is applied to one huge surface that changes whenever a tile loads or the pane moves, while a filter
+   on a tile image is rasterised once per tile with that tile (cheaper while panning and zooming). An overlay pane cannot
+   sit between the tiles and the markers without moving with the map pane, so it was not used. */
+:root[data-theme="dark"] img.leaflet-tile { filter: brightness(.78) contrast(1.08) saturate(.85); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) img.leaflet-tile { filter: brightness(.78) contrast(1.08) saturate(.85); }
+}
+
+/* ---------- Leaflet controls ---------- */
+.leaflet-touch .leaflet-control-layers-toggle { width: var(--tap); height: var(--tap); background-size: 26px 26px; }
+.leaflet-control-layers-expanded { padding: var(--s-2) var(--s-3); font-size: var(--t-body); }
+.leaflet-control-layers label { display: block; padding: var(--s-2) 0; }
+.leaflet-control-layers input { width: 1.25rem; height: 1.25rem; margin-right: var(--s-2); vertical-align: middle; }
+.leaflet-control-attribution { font-size: .75rem; }
+#mapview[data-os="sheet"] .leaflet-bottom { bottom: var(--peek); }   /* attribution stays above the peeking sheet */
+
+/* ---------- markers ---------- */
+.mk-wrap, .mc-wrap { display: grid; place-items: center; background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.mk-wrap:focus, .mc-wrap:focus { outline: none; }
+.mk-wrap:focus-visible .mk, .mc-wrap:focus-visible .mc { outline: 3px solid var(--c-ink); outline-offset: 3px; }
+.mk { position: relative; box-sizing: border-box; display: grid; place-items: center; font-weight: var(--w-bold); line-height: 1; }
+/* client: disc in the group colour, priority letter (white or ink, whichever contrasts), small dot when there is no priority */
+.mk-c { width: 30px; height: 30px; border-radius: 50%; background: var(--g); color: var(--gi); border: 2px solid var(--c-surface); box-shadow: 0 1px 3px var(--c-shadow-strong); font-size: 15px; }
+.mk-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gi); }
+/* planned today: waymark-yellow badge in the corner with the visit order */
+.mk-ord { position: absolute; top: -9px; right: -9px; box-sizing: border-box; min-width: 19px; height: 19px; padding: 0 4px; display: grid; place-items: center; border-radius: 10px; background: var(--c-mark); color: var(--c-on-mark); border: 1.5px solid var(--c-surface); font-size: 11px; font-variant-numeric: tabular-nums; }
+/* prospect: diamond in the status colour with the status glyph kept upright */
+.mk-p { width: 26px; height: 26px; transform: rotate(45deg); border-radius: var(--r-xs); background: var(--tone); color: var(--c-on-status); border: 2px solid var(--c-surface); box-shadow: 0 1px 3px var(--c-shadow-strong); }
+.mk-p .ic { width: 16px; height: 16px; transform: rotate(-45deg); }
+/* selected: toggled on the marker element, nothing is rebuilt */
+.is-selected .mk { transform: scale(1.25); outline: 3px solid var(--c-mark); box-shadow: var(--e-2); }
+.is-selected .mk-p { transform: rotate(45deg) scale(1.25); }
+/* the selected item is inside this cluster (selection from a list pans instead of zooming) */
+.is-selected-parent .mc { outline: 3px solid var(--c-mark); outline-offset: 2px; }
+
+/* cluster: surface disc, count in ink, 4px ring split by share of clients (primary) and prospects (blue) */
+.mc { width: var(--sz); height: var(--sz); box-sizing: border-box; display: grid; place-items: center; border-radius: 50%; background: conic-gradient(var(--c-primary) 0 var(--pc), var(--st-todo) var(--pc) 100%); box-shadow: var(--e-2); }
+.mc-n { width: calc(100% - 8px); height: calc(100% - 8px); display: grid; place-items: center; border-radius: 50%; background: var(--c-surface); color: var(--c-ink); font-size: 15px; font-weight: var(--w-bold); font-variant-numeric: tabular-nums; }
+
+/* home marker (not clustered) */
+.hm { width: 1.625rem; height: 1.625rem; border-radius: 50%; background: var(--c-map-home); color: var(--c-map-home-ink); display: grid; place-items: center; border: 2px solid var(--c-map-ring); }
+.hm .ic { width: 1rem; height: 1rem; }
+
+/* ---------- filter chips over the map ---------- */
+#maptools { position: absolute; z-index: 800; top: 0; left: 0; right: calc(var(--tap) + var(--s-5)); display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-2) var(--s-4) calc(var(--s-3) + var(--inset-left)); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; pointer-events: none; }
+#maptools::-webkit-scrollbar { display: none; }
+#maptools > * { pointer-events: auto; flex: none; }
+.mf { box-shadow: var(--e-2); }
+.mf:not([data-f^="st:"])[data-f][aria-pressed="true"]::before { content: "\2713"; font-weight: var(--w-bold); }
+/* locked chip (aria-disabled): muted, dashed border, no pressed look; the helper line says why, so colour is not the only cue.
+   Colours are explicit (not opacity) so the text keeps 4.5:1 and the border 3:1. */
+.fchip.mf[aria-disabled="true"] { background: var(--c-surface-2); color: var(--c-ink-2); border-style: dashed; border-color: var(--c-line-strong); font-weight: var(--w-regular); box-shadow: none; cursor: default; }
+.fchip.mf[aria-disabled="true"] .gl { color: inherit; }
+.fchip.mf[aria-disabled="true"]::before { content: none; }
+.mf-reset { border-color: var(--c-primary); color: var(--c-primary); font-weight: var(--w-semi); }
+.mf-badge { display: inline-flex; align-items: center; gap: var(--s-1); min-height: 2.25rem; padding: 0 var(--s-3); border-radius: var(--r-pill); background: var(--c-ink); color: var(--c-bg); font-size: var(--t-small); font-weight: var(--w-semi); box-shadow: var(--e-2); }
+.mf-badge[hidden], .mf-reset[hidden] { display: none; }
+.mf-sep { width: 1px; height: 28px; background: var(--c-line-strong); }
+/* notes under the chips: opaque so they read over any tiles in both themes */
+#mapnotes { position: absolute; z-index: 790; top: 4.75rem; left: calc(var(--s-3) + var(--inset-left)); right: calc(var(--tap) + var(--s-5)); display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); pointer-events: none; }
+.map-note { margin: 0; padding: var(--s-1) var(--s-3); border-radius: var(--r-s); background: var(--c-surface); color: var(--c-ink); border: 1px solid var(--c-line-strong); font-size: var(--t-small); box-shadow: var(--e-2); }
+/* empty project: explanation over the base map */
+.map-empty { position: absolute; z-index: 900; left: 50%; top: 42%; transform: translate(-50%, -50%); width: min(22rem, calc(100% - var(--s-6))); max-height: 70%; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-line-strong); border-radius: var(--r-m); box-shadow: var(--e-3); }
+
+/* ---------- "Sur la carte" ---------- */
+.os-g { flex: none; width: 44px; display: grid; place-items: center; }
+.os-pane .os-h { margin: 0 0 var(--s-3); font-size: var(--t-title-s); }
+.os-rows { display: grid; gap: var(--s-2); }
+.os-more { margin: var(--s-3) 0 0; text-align: center; }
+.row-os { min-height: 3.5rem; }
+
+/* bottom sheet: compact and medium Carte. Peek = handle + count (72dp), open = about 55% with the scrollable list. */
+.msheet { display: none; position: absolute; left: 0; right: 0; bottom: 0; z-index: 1100; flex-direction: column; height: var(--peek); background: var(--c-surface); border-radius: var(--r-l) var(--r-l) 0 0; box-shadow: var(--e-3); transition: height var(--dur) var(--ease); }
+#mapview[data-os="sheet"] .msheet { display: flex; }
+.msheet[data-state="open"] { height: 55%; }
+.msheet.dragging { transition: none; }
+.msheet-handle { flex: none; width: 100%; min-height: var(--peek); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-2); border: 0; background: none; color: var(--c-ink); font-weight: var(--w-semi); touch-action: none; }
+.msheet-grab { width: 40px; height: 4px; border-radius: 2px; background: var(--c-line-strong); }
+.os-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 var(--s-3) var(--s-3); }
+.os-list .row { box-shadow: none; border-bottom: 1px solid var(--c-line); border-radius: 0; background: none; }
+.os-list .row.sel { background: var(--c-primary-soft); }
+.sheet .row-os.sel { background: var(--c-primary-soft); }

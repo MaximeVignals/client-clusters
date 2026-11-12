@@ -1,20 +1,39 @@
-// HTML for each screen. Pure functions of App.proj / App.ui; events are handled in app.js through data-act attributes.
+// HTML for each screen (compact layout). Pure functions of App.proj / App.ui / App.pairing / Sync.status();
+// events are handled in app.js through data-act attributes. All user-visible text is French (see i18n.js).
 'use strict';
 
 const Views = (() => {
   const { esc } = U;
+  const ic = Icon.svg, NB = T.NB;
   const PROSPECT_STATUS = {
-    todo: { label: 'To contact', color: '#2563eb' },
-    visited: { label: 'Visited', color: '#c7811a' },
-    converted: { label: 'Converted', color: '#2e8a57' },
-    no: { label: 'Not interested', color: '#8b8d86' },
+    todo: { label: T.status.todo, glyph: 's-todo', mark: '○', cls: 'st-todo', color: 'var(--st-todo)' },
+    visited: { label: T.status.visited, glyph: 's-visited', mark: '✓', cls: 'st-visited', color: 'var(--st-visited)' },
+    converted: { label: T.status.converted, glyph: 's-converted', mark: '★', cls: 'st-converted', color: 'var(--st-converted)' },
+    no: { label: T.status.no, glyph: 's-no', mark: '×', cls: 'st-no', color: 'var(--st-lost)' },
   };
+  const statusKey = p => (PROSPECT_STATUS[p.status] ? p.status : 'todo');
   const clients = () => Object.values(App.proj.clients);
   const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'fr');
   const groupColor = c => (App.proj.groups[c.groupId] && App.proj.groups[c.groupId].color) || '';
   const town = e => [e.postcode, e.city].filter(Boolean).join(' ');
   const visitList = c => Object.values(c.visits || {});
+  // Text typed but not yet saved lives in App.ui.drafts and wins over the stored value (it survives redraws and fold/unfold).
+  const draft = (key, stored) => App.draftOr(key, stored);
+  const isSel = (kind, id) => { const s = App.ui.sel; return !!s && s.kind === kind && s.id === id; };
+  const isEmptyProject = () => !App.proj || (!Object.keys(App.proj.clients || {}).length && !Object.keys(App.proj.prospects || {}).length);
+  const hasClients = () => !!App.proj && Object.keys(App.proj.clients || {}).length > 0;
+  const seeOnMap = (kind, e) => (U.hasLoc(e) ? `<p class="hd-map"><button type="button" class="btn tonal" data-act="show-on-map" data-kind="${kind}" data-id="${esc(e.id)}">${ic('i-map')}${esc(T.map.see)}</button></p>` : '');
+  const syncBtn = `<button type="button" class="btn" data-act="sync-now">${ic('i-sync')}${esc(T.empty.syncNow)}</button>`;
+  const empty = (title, text, extra = '') => `<div class="empty"><p class="empty-t">${esc(title)}</p>${text ? `<p class="muted">${esc(text)}</p>` : ''}${extra}</div>`;
 
+  // Prospect status: diamond (glyph + colour); the status name is always written next to it.
+  const diamond = (key, cls = '') => `<span class="dia ${PROSPECT_STATUS[key].cls} ${cls}" aria-hidden="true">${ic(PROSPECT_STATUS[key].glyph)}</span>`;
+
+  // ---------- top bar ----------
+  const SYNC_ICON = { off: 'i-cloud-off', ok: 'i-check', busy: 'i-spinner', offline: 'i-cloud-off', error: 'i-alert', disconnected: 'i-alert' };
+  const syncPill = state => `<span class="pill-in">${ic(SYNC_ICON[state] || 'i-check', state === 'busy' ? 'spin' : '')}<span>${esc(T.sync[state] || '')}</span></span>`;
+
+  // ---------- Aujourd’hui ----------
   function plannedItems() {
     const t = U.todayISO(), today = [], past = [];
     for (const c of clients()) for (const v of visitList(c)) {
@@ -27,108 +46,214 @@ const Views = (() => {
     return { today, past };
   }
 
+  const TAG_CLS = { open: 'ok', soon: 'warn', later: 'warn', closed: 'danger' };
   function hoursTag(c) {
     const h = c.gbp && c.gbp.hours;
     const s = h && Hours.short(h);
-    return s ? `<span class="tag ${esc(s.cls)}">${esc(s.text)}</span>` : '';
+    return s ? `<span class="tag ${TAG_CLS[s.cls] || ''}">${esc(T.hoursShort(s.text))}</span>` : '';
   }
 
-  function visitRow({ c, v }, withDate, num) {
-    const color = groupColor(c);
-    return `<button class="row" data-act="open-client" data-id="${esc(c.id)}">
-      ${num ? `<span class="num">${num}</span>` : `<span class="dot" style="background:${esc(color || '#888')}"></span>`}
-      <span class="grow"><div class="name">${esc(c.name)}</div>
-      <div class="sub">${withDate ? esc(U.fmtDate(v.date)) + ' · ' : ''}${esc(c.city || town(c) || c.address || '')}${v.type === 'call' ? ' · call' : ''}</div></span>
-      ${hoursTag(c)}</button>`;
+  function visitRow({ c, v }, past, num) {
+    const ids = `data-id="${esc(c.id)}" data-vid="${esc(v.id)}"`;
+    const lead = past
+      ? `<span class="datechip"><b>${esc(T.dayNum(v.date))}</b><span>${esc(T.monthShort(v.date))}</span></span>`
+      : `<span class="mark"><span class="sr">Visite </span>${esc(num)}</span>`;
+    const where = c.city || town(c) || c.address || '';
+    const on = isSel('client', c.id);
+    const main = `<button type="button" class="row-main" data-key="rm:${esc(c.id)}:${esc(v.id)}"${on ? ' aria-current="true"' : ''}>${lead}<span class="grow"><span class="name">${esc(c.name)}</span>`
+      + `${where ? `<span class="sub">${esc(where)}</span>` : ''}${v.type === 'call' ? `<span class="sub">${esc(T.types.call)}</span>` : ''}${hoursTag(c)}</span></button>`;
+    const done = `<button type="button" class="btn tonal" data-act="visit-done" ${ids} aria-label="Fait${NB}: ${esc(c.name)}">Fait</button>`;
+    const cancel = `<button type="button" class="btn sec" data-act="visit-cancel" ${ids} aria-label="Pas eu lieu${NB}: ${esc(c.name)}">Pas eu lieu</button>`;
+    return `<div class="row ${past ? 'row-past' : 'row-today'}${on ? ' sel' : ''}" data-act="open-client" data-id="${esc(c.id)}">${main}<div class="row-actions">${past ? done + cancel : done}</div></div>`;
   }
+
+  // Paired but nothing synced yet (shared by Aujourd’hui and the Carte overlay).
+  const emptyClients = () => empty(T.empty.clients, T.empty.clientsHint, syncBtn);
 
   function today() {
+    if (isEmptyProject()) return emptyClients();
     const { today: list, past } = plannedItems();
-    let h = `<h2>Today · ${esc(U.fmtDate(U.todayISO()))}</h2>`;
+    let h = `<div class="dayhead"><p class="date">${esc(T.fmtDay())}</p><p class="summary">${esc(T.todaySummary(list.length, past.length))}</p></div>`;
+    h += `<section aria-labelledby="h-planned"><h2 id="h-planned">Prévues aujourd’hui</h2>`;
     h += list.length ? list.map((it, i) => visitRow(it, false, Number.isFinite(it.v.order) ? it.v.order : i + 1)).join('')
-      : '<div class="card muted">Nothing planned for today.</div>';
-    if (past.length) h += `<h2>Unconfirmed (${past.length})</h2><p class="muted small" style="margin:0 4px 8px">Planned visits in the past. Open one to mark it done or not.</p>` + past.map(it => visitRow(it, true)).join('');
+      : empty('Rien de prévu aujourd’hui.', `Touchez ${T.q('Noter une visite')} pour consigner une visite ou un appel.`);
+    h += '</section>';
+    if (past.length) {
+      h += `<section aria-labelledby="h-unconfirmed"><h2 id="h-unconfirmed">À confirmer (${past.length})</h2><p class="muted small intro">Visites prévues dans le passé. Marquez-les faites ou non.</p>`
+        + past.map(it => visitRow(it, true)).join('') + '</section>';
+    }
     return h;
   }
 
+  // ---------- Client ----------
   function hoursBlock(c) {
     const hours = c.gbp && c.gbp.hours;
     if (!hours || !Hours.weekLines) return '';
     const st = Hours.status(hours);
     if (!st) return '';
-    return `<h2>Opening hours</h2><div class="card"><strong class="${st.open ? '' : 'muted'}" style="color:var(--${st.open ? 'ok' : 'danger'})">${esc(st.text)}</strong>
-      <div class="hours">${Hours.weekLines(hours).map(l => `<span class="muted">${esc(l.name.slice(0, 3))}</span><span>${esc(l.text)}</span>`).join('')}</div></div>`;
+    const todayDow = new Date().getDay();
+    return `<details class="fold" id="hours-d"${App.ui.hoursOpen ? ' open' : ''}><summary>Horaires${ic('i-chev', 'chev')}</summary>
+      <p class="hstatus ${st.open ? 'ok' : 'danger'}">${esc(T.hoursStatus(st.text))}</p>
+      <dl class="hours">${Hours.weekLines(hours).map(l => `<dt class="${l.day === todayDow ? 'now' : ''}">${esc(T.dayName(l.day))}</dt><dd class="${l.day === todayDow ? 'now' : ''}">${esc(T.hoursLine(l.text))}</dd>`).join('')}</dl></details>`;
   }
 
-  const STATUS_LABEL = { planned: 'Planned', done: 'Done', cancelled: "Didn't happen" };
+  function prioBadge(tier) {
+    const t = String(tier || '').toUpperCase();
+    if (!t) return '';
+    const g = { A: 'p-a', B: 'p-b', C: 'p-c' }[t];
+    return `<span class="badge">${g ? ic(g) : ''}<span>Priorité ${esc(t)}</span></span>`;
+  }
+
+  // « Groupe 3, Nord », « Groupe 3 », « Nord » or « Groupe » (never a trailing space)
+  function groupLabel(g) {
+    const n = g.number != null && String(g.number).trim() !== '' ? 'Groupe ' + String(g.number).trim() : '';
+    const name = g.name ? String(g.name).trim() : '';
+    return n && name ? n + ', ' + name : n || name || 'Groupe';
+  }
+  function groupChip(c) {
+    const g = App.proj.groups[c.groupId];
+    if (!g) return `<span class="badge"><span class="gdot none" aria-hidden="true"></span><span>Sans groupe</span></span>`;
+    return `<span class="badge"><span class="gdot" style="background:${esc(g.color || '#888')}" aria-hidden="true"></span><span>${esc(groupLabel(g))}</span></span>`;
+  }
 
   function visitHtml(c, v) {
     const t = U.todayISO(), st = Visits.vStatus(v, t);
-    const label = st === 'planned' && v.date < t ? 'Not confirmed' : STATUS_LABEL[st] || st;
-    const kind = (Visits.VISIT_TYPES[v.type || 'visit'] || 'Visit') + (v.outcome ? ' · ' + (Visits.OUTCOMES[v.outcome] || v.outcome) : '');
+    const label = st === 'planned' && v.date < t ? T.visitStatus.unconfirmed : T.visitStatus[st] || st;
+    const cls = st === 'planned' ? 'plan' : st === 'done' ? 'ok' : '';
+    const kind = [T.types[v.type || 'visit'] || T.types.visit, v.outcome ? T.outcomes[v.outcome] || v.outcome : ''].filter(Boolean).join(', ');
+    const ids = `data-id="${esc(c.id)}" data-vid="${esc(v.id)}"`;
     let acts = '';
-    if (st === 'planned') acts = `<div class="btns"><button class="btn small" data-act="visit-done" data-id="${esc(c.id)}" data-vid="${esc(v.id)}">Done</button>
-      <button class="btn small sec" data-act="visit-cancel" data-id="${esc(c.id)}" data-vid="${esc(v.id)}">Didn't happen</button></div>`;
-    else if (st === 'done') acts = `<div class="btns"><button class="btn small sec" data-act="visit-undo" data-id="${esc(c.id)}" data-vid="${esc(v.id)}">${v.confirmedFrom === 'planned' ? 'Undo' : 'Remove'}</button></div>`;
-    else if (st === 'cancelled') acts = `<div class="btns"><button class="btn small sec" data-act="visit-replan" data-id="${esc(c.id)}" data-vid="${esc(v.id)}">Undo</button></div>`;
-    return `<div class="visit" data-visit="${esc(v.id)}"><div class="head"><span>${esc(U.fmtDate(v.date))}</span><span class="tag">${esc(label)}</span></div>
-      <div class="muted small">${esc(kind)}</div>${v.note ? `<div>${esc(v.note)}</div>` : ''}${acts}</div>`;
+    if (st === 'planned') acts = `<div class="btns btns-sm"><button type="button" class="btn tonal sm" data-act="visit-done" ${ids}>Fait</button><button type="button" class="btn text sm" data-act="visit-cancel" ${ids}>Pas eu lieu</button></div>`;
+    else if (st === 'done') acts = `<div class="btns btns-sm"><button type="button" class="btn text sm" data-act="visit-undo" ${ids}>${v.confirmedFrom === 'planned' ? 'Annuler' : 'Retirer'}</button></div>`;
+    else if (st === 'cancelled') acts = `<div class="btns btns-sm"><button type="button" class="btn tonal sm" data-act="visit-replan" ${ids}>Replanifier</button></div>`;
+    return `<div class="visit" data-visit="${esc(v.id)}"><div class="vhead"><span class="vdate">${esc(T.fmtDate(v.date))}</span><span class="tag ${cls}">${esc(label)}</span></div>
+      <div class="muted small">${esc(kind)}</div>${v.note ? `<div class="vnote">${esc(v.note)}</div>` : ''}${acts}</div>`;
   }
 
-  function logForm(c) {
-    const opts = Object.entries(Visits.OUTCOMES).map(([k, l]) => `<option value="${esc(k)}">${esc(l)}</option>`).join('');
-    if (!App.ui.logOpen) return `<button class="btn sec full" data-act="log-open">Log a visit</button>`;
-    return `<div class="card" id="logform"><label class="field"><span>Date</span><input type="date" id="lv-date" value="${U.todayISO()}"></label>
-      <label class="field"><span>Type</span><select id="lv-type"><option value="visit">Visit</option><option value="call">Phone call</option></select></label>
-      <label class="field"><span>Outcome</span><select id="lv-outcome">${opts}</select></label>
-      <label class="field"><span>Note</span><textarea id="lv-note" placeholder="What happened?"></textarea></label>
-      <div class="btns"><button class="btn" data-act="log-save" data-id="${esc(c.id)}">Save visit</button><button class="btn sec" data-act="log-cancel">Cancel</button></div></div>`;
+  // The planned visit the bar offers to confirm: today's, else the most recent one in the past.
+  function pendingVisit(c) {
+    const t = U.todayISO();
+    return visitList(c).filter(v => Visits.vStatus(v, t) === 'planned' && v.date <= t).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))[0] || null;
+  }
+
+  // Notes field. The text is the unsaved draft if there is one; a notice appears when the PC changed the note meanwhile.
+  function notesBlock(kind, e) {
+    const tid = kind === 'client' ? 'notes' : 'pnotes', label = 'Notes sur ce ' + (kind === 'client' ? 'client' : 'prospect');
+    const v = App.noteView(kind, e.id, e.notes || '');
+    const conflict = v.conflict
+      ? `<div class="note-conflict" role="group" aria-labelledby="note-conflict-msg"><p id="note-conflict-msg">Cette note a été modifiée sur le PC. Votre texte n’est pas encore enregistré.</p>
+        <div class="btns"><button type="button" class="btn" data-act="notes-keep" data-kind="${kind}" data-id="${esc(e.id)}">Garder mon texte</button><button type="button" class="btn sec" data-act="notes-discard" data-kind="${kind}" data-id="${esc(e.id)}">Reprendre celle du PC</button></div></div>`
+      : '';
+    return `<section class="sec"><h2 id="h-notes" tabindex="-1">Notes</h2><textarea id="${tid}" data-id="${esc(e.id)}" aria-label="${label}" placeholder="${label}">${esc(v.text)}</textarea>${conflict}
+      <p id="notes-status" class="saved" role="status">${App.ui.notesSaved === e.id ? ic('i-check') + 'Enregistré' : ''}</p></section>`;
   }
 
   function client(id) {
     const c = App.proj.clients[id];
-    if (!c) return '<div class="card muted">This client no longer exists.</div>';
-    const g = App.proj.groups[c.groupId];
-    const phones = U.phonesOf(c);
+    if (!c) return empty('Ce client n’existe plus.', '');
     const visits = visitList(c).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
     const last = Visits.lastVisit({ visits: visitList(c) }, U.todayISO());
-    return `<div class="card"><div style="font-size:1.2rem;font-weight:700">${esc(c.name)}</div>
-      <div>${esc(U.addressLine(c))}</div>
-      <div class="muted small">${g ? `Group ${esc(g.number)}${g.name ? ' · ' + esc(g.name) : ''}` : 'No group'}${c.tier ? ' · ' + esc(c.tier) : ''}${last ? ' · last visit ' + esc(U.fmtDate(last)) : ''}</div>
-      <div class="btns">${phones.map(p => `<button class="btn sec" data-act="call" data-url="tel:${esc(p.tel)}">&#9742; ${esc(p.text)}</button>`).join('')}
-      <button class="btn" data-act="navigate" data-url="${esc(U.navUrl(c))}">Navigate</button></div></div>
+    const tag = hoursTag(c);
+    const logBtn = pendingVisit(c) ? `<button type="button" class="btn tonal" data-act="log-open" data-id="${esc(c.id)}">${ic('i-plus')}Noter une visite</button>` : '';
+    return `<div class="hd"><h2 id="detail-title" class="hd-name" tabindex="-1">${esc(c.name)}</h2>
+      <div class="badges">${prioBadge(c.tier)}${groupChip(c)}</div>
+      <p class="addr">${c.address ? `<span>${esc(c.address)}</span>` : ''}${town(c) ? `<span>${esc(town(c))}</span>` : ''}</p>
+      ${seeOnMap('client', c)}
+      ${last ? `<p class="muted small">Dernière visite${NB}: ${esc(T.fmtDate(last))}</p>` : ''}${tag ? `<p>${tag}</p>` : ''}</div>
       ${hoursBlock(c)}
-      <h2>Notes</h2><textarea id="notes" data-id="${esc(c.id)}" placeholder="Notes about this client">${esc(c.notes || '')}</textarea>
-      <h2>Visits</h2>${logForm(c)}
-      <div class="card" id="history">${visits.length ? visits.map(v => visitHtml(c, v)).join('') : '<span class="muted">No visits yet.</span>'}</div>`;
+      ${notesBlock('client', c)}
+      <section class="sec"><div class="sec-head"><h2 id="h-history" tabindex="-1">Historique</h2>${logBtn}</div>
+      <div id="history">${visits.length ? visits.map(v => visitHtml(c, v)).join('') : `<p class="muted">Aucune visite pour l’instant. Touchez ${T.q('Noter une visite')} pour en ajouter une.</p>`}</div></section>`;
+  }
+
+  // Nothing to navigate to without coordinates or an address.
+  const canNavigate = e => U.hasLoc(e) || !!U.addressLine(e);
+  const navBtn = (e, label) => !canNavigate(e) ? '' : `<button type="button" class="btn icon" data-act="navigate" data-url="${esc(U.navUrl(e))}" aria-label="${label}" title="${label}">${ic('i-nav')}</button>`;
+  function callBtn(e, coll, label, withText) {
+    const phones = U.phonesOf(e);
+    if (!phones.length) return '';
+    const text = withText ? `${ic('i-phone')}<span>${label}</span>` : ic('i-phone');
+    const cls = withText ? 'btn tonal' : 'btn icon';
+    if (phones.length === 1) return `<button type="button" class="${cls}" data-act="call" data-url="tel:${esc(phones[0].tel)}" aria-label="${label}" title="${label}">${text}</button>`;
+    return `<button type="button" class="${cls}" data-act="call-choose" data-coll="${coll}" data-id="${esc(e.id)}" aria-label="${label}" title="${label}">${text}</button>`;
+  }
+
+  function clientBar(id) {
+    const c = App.proj.clients[id];
+    if (!c) return '';
+    const pend = pendingVisit(c);
+    const main = pend
+      ? `<button type="button" class="btn grow" data-act="visit-done" data-id="${esc(c.id)}" data-vid="${esc(pend.id)}">Fait</button>`
+        + `<button type="button" class="btn sec grow" data-act="visit-cancel" data-id="${esc(c.id)}" data-vid="${esc(pend.id)}">Pas eu lieu</button>`
+      : `<button type="button" class="btn grow" data-act="log-open" data-id="${esc(c.id)}">${ic('i-plus')}Noter une visite</button>`;
+    return main + callBtn(c, 'clients', 'Appeler', false) + navBtn(c, 'Itinéraire');
+  }
+
+  // ---------- Prospects ----------
+  const pq = () => draft('search:prospects', '');
+  const prospectMatcher = q => {
+    const needle = (q || '').trim().toLowerCase();
+    return p => !needle || [p.name, p.city, p.address, p.postcode].some(x => String(x || '').toLowerCase().includes(needle));
+  };
+
+  function prospectChips() {
+    const list = Object.values(App.proj.prospects).filter(prospectMatcher(pq()));
+    const f = App.ui.pfilter || 'all';
+    const chip = (key, label, n, glyph) => `<button type="button" class="fchip" data-act="pfilter" data-v="${key}" aria-pressed="${f === key}">${glyph || ''}<span>${esc(label)}</span><span class="cnt">${n}</span></button>`;
+    return chip('all', 'Tous', list.length, '')
+      + Object.entries(PROSPECT_STATUS).map(([k, m]) => chip(k, m.label, list.filter(p => statusKey(p) === k).length, `<span class="gl ${m.cls}" aria-hidden="true">${ic(m.glyph)}</span>`)).join('');
   }
 
   function prospectRows(q) {
-    const list = Object.values(App.proj.prospects);
-    const needle = (q || '').trim().toLowerCase();
-    const match = p => !needle || [p.name, p.city, p.address, p.postcode].some(x => String(x || '').toLowerCase().includes(needle));
+    const all = Object.values(App.proj.prospects);
+    if (!all.length) return empty(T.empty.prospects, T.empty.prospectsHint, syncBtn);
+    const match = prospectMatcher(q), f = App.ui.pfilter || 'all';
     let h = '';
     for (const [key, meta] of Object.entries(PROSPECT_STATUS)) {
-      const items = list.filter(p => (p.status || 'todo') === key && match(p)).sort(byName);
+      if (f !== 'all' && f !== key) continue;
+      const items = all.filter(p => statusKey(p) === key && match(p)).sort(byName);
       if (!items.length) continue;
-      h += `<h2>${esc(meta.label)} (${items.length})</h2>` + items.map(p => `<button class="row" data-act="open-prospect" data-id="${esc(p.id)}">
-        <span class="dot" style="background:${esc(meta.color)}"></span><span class="grow"><div class="name">${esc(p.name)}</div><div class="sub">${esc(p.city || town(p) || p.address || '')}</div></span></button>`).join('');
+      if (f === 'all') h += `<h2>${esc(meta.label)} (${items.length})</h2>`;
+      h += items.map(p => `<button type="button" class="row row-p${isSel('prospect', p.id) ? ' sel' : ''}" data-act="open-prospect" data-id="${esc(p.id)}"${isSel('prospect', p.id) ? ' aria-current="true"' : ''}>${diamond(key)}<span class="grow"><span class="name">${esc(p.name)}</span>`
+        + `<span class="sub">${esc(p.city || town(p) || p.address || '')}</span><span class="sub stext ${meta.cls}">${esc(meta.label)}</span></span></button>`).join('');
     }
-    return h || '<div class="card muted">No prospects.</div>';
+    if (h) return h;
+    if ((q || '').trim()) return empty(`Aucun prospect ne correspond à ${T.q(q.trim())}.`, '', `<button type="button" class="btn sec" data-act="clear-search">Effacer la recherche</button>`);
+    return empty('Aucun prospect avec ce statut.', '', `<button type="button" class="btn sec" data-act="pfilter" data-v="all">Tout afficher</button>`);
   }
 
   function prospects() {
-    return `<input type="search" id="psearch" placeholder="Search prospects" value="${esc(App.ui.pq || '')}" aria-label="Search prospects"><div id="plist">${prospectRows(App.ui.pq)}</div>`;
+    if (!Object.keys(App.proj.prospects).length) return prospectRows('');   // nothing to search or filter
+    return `<div class="sticky" id="pbar"><label class="sr" for="psearch">Rechercher un prospect</label>
+      <input type="search" id="psearch" placeholder="Rechercher un prospect" autocomplete="off" value="${esc(pq())}">
+      <div class="chips" id="pchips" role="group" aria-label="Filtrer par statut">${prospectChips()}</div></div><div id="plist">${prospectRows(pq())}</div>`;
   }
 
   function prospect(id) {
     const p = App.proj.prospects[id];
-    if (!p) return '<div class="card muted">This prospect no longer exists.</div>';
-    const phones = U.phonesOf(p), cur = p.status || 'todo';
-    return `<div class="card"><div style="font-size:1.2rem;font-weight:700">${esc(p.name)}</div><div>${esc(U.addressLine(p))}</div>
-      <div class="btns">${phones.map(x => `<button class="btn sec" data-act="call" data-url="tel:${esc(x.tel)}">&#9742; ${esc(x.text)}</button>`).join('')}<button class="btn" data-act="navigate" data-url="${esc(U.navUrl(p))}">Navigate</button></div></div>
-      <h2>Status</h2><div class="seg">${Object.entries(PROSPECT_STATUS).map(([k, m]) => `<button data-act="pstatus" data-id="${esc(p.id)}" data-status="${k}" class="${k === cur ? 'on' : ''}">${esc(m.label)}</button>`).join('')}</div>
-      <h2>Notes</h2><textarea id="pnotes" data-id="${esc(p.id)}" placeholder="Notes about this prospect">${esc(p.notes || '')}</textarea>`;
+    if (!p) return empty('Ce prospect n’existe plus.', '');
+    const cur = statusKey(p);
+    return `<div class="hd"><h2 id="detail-title" class="hd-name" tabindex="-1">${esc(p.name)}</h2>
+      <p class="addr">${p.address ? `<span>${esc(p.address)}</span>` : ''}${town(p) ? `<span>${esc(town(p))}</span>` : ''}</p>
+      ${seeOnMap('prospect', p)}</div>
+      <section class="sec"><h2 id="h-status">Statut</h2><div class="choices" role="group" aria-labelledby="h-status">${Object.entries(PROSPECT_STATUS).map(([k, m]) =>
+        `<button type="button" aria-pressed="${k === cur}" class="choice ${m.cls}${k === cur ? ' on' : ''}" data-act="pstatus" data-id="${esc(p.id)}" data-status="${k}">${ic(m.glyph)}<span>${esc(m.label)}</span></button>`).join('')}</div></section>
+      ${notesBlock('prospect', p)}`;
+  }
+
+  function prospectBar(id) {
+    const p = App.proj.prospects[id];
+    if (!p) return '';
+    return callBtn(p, 'prospects', 'Appeler', true) + (canNavigate(p) ? `<button type="button" class="btn grow" data-act="navigate" data-url="${esc(U.navUrl(p))}">${ic('i-nav')}<span>Itinéraire</span></button>` : '');
+  }
+
+  // ---------- Réglages ----------
+  function pairField() {
+    return `<label class="field"><span>Ou collez le code d’appairage</span><textarea id="paste" rows="3" placeholder="CCSYNC1...." autocapitalize="off" autocomplete="off" spellcheck="false"></textarea></label>`;
+  }
+  function pairControls(label) {
+    return `<div class="btns"><button type="button" class="btn grow" data-act="scan">Scanner le code QR</button></div>${pairField()}
+      <button type="button" class="btn sec full" data-act="paste-pair">${label || 'Appairer avec ce code'}</button>`;
   }
 
   function settings() {
@@ -136,36 +261,132 @@ const Views = (() => {
     let host = '';
     try { host = new URL(p.url).host; } catch (e) { host = p.url || ''; }
     const ap = App.appearance;
-    return `<h2>Sync</h2><div class="card"><div>Paired with <strong>${esc(p.name || 'your PC')}</strong></div><div class="muted small">${esc(host)}</div>
-      <div style="margin-top:8px">Status: <strong>${esc(st.text || 'Synced')}</strong></div><div class="muted small">Last sync: ${esc(U.fmtTime(Sync.lastSyncAt()))}</div>
-      <div class="btns"><button class="btn" data-act="sync-now">Sync now</button></div></div>
-      <h2>Pairing</h2><div class="card"><p class="muted small" style="margin-top:0">To use another PC, scan its code or paste it here. This replaces the current pairing.</p>${pairControls()}</div>
-      <h2>Appearance</h2><div class="seg" id="appearance">${['system', 'light', 'dark'].map(k => `<button data-act="appearance" data-v="${k}" class="${ap === k ? 'on' : ''}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>
-      <h2>This phone</h2><button class="btn danger full" data-act="disconnect">Disconnect this phone</button>
-      <p class="muted small">Deletes the data stored on this phone. Your data on the PC is not affected.</p>
-      <p class="muted small">Client Clusters Android 1.0.1</p>`;
+    const state = T.sync[st.state] ? st.state : 'off';
+    const raw = [st.state === 'error' ? st.text : '', App.lastActionError || ''].filter(Boolean).join(' / ');
+    const detail = (st.state === 'error' && st.text ? `<p class="muted small">${esc(T.syncError(st.text))}</p>` : '')
+      + (raw ? `<details class="fold"><summary>Détails${ic('i-chev', 'chev')}</summary><p class="muted small">${esc(raw)}</p></details>` : '');
+    return `<section class="group" aria-labelledby="h-sync"><h2 id="h-sync">Synchronisation</h2>
+      <p class="statusline ${state}">${ic(SYNC_ICON[state], state === 'busy' ? 'spin' : '')}<span>${esc(T.sync[state])}</span></p>${detail}
+      <p class="muted">Dernière synchro${NB}: ${esc(T.fmtRelative(Sync.lastSyncAt()))}</p>
+      <button type="button" class="btn tonal full" data-act="sync-now">${ic('i-sync')}${esc(st.state === 'error' ? T.empty.retry : T.empty.syncNow)}</button></section>
+      <section class="group" aria-labelledby="h-look"><h2 id="h-look">Apparence</h2>
+      <div class="seg" id="appearance" role="group" aria-labelledby="h-look">${[['light', 'Clair'], ['dark', 'Sombre'], ['system', 'Système']].map(([k, l]) =>
+        `<button type="button" aria-pressed="${ap === k}" data-act="appearance" data-v="${k}" class="${ap === k ? 'on' : ''}">${l}</button>`).join('')}</div></section>
+      <section class="group" aria-labelledby="h-phone"><h2 id="h-phone">Ce téléphone</h2>
+      <p>Appairé avec <strong>${esc(p.name || 'votre PC')}</strong></p><p class="muted small">${esc(host)}</p>
+      <details class="fold" id="pair-d"${App.ui.pairOpen ? ' open' : ''}><summary>Appairer avec un autre PC${ic('i-chev', 'chev')}</summary>
+        <p class="muted small">Scannez le code d’un autre PC ou collez-le ici. Cela remplace l’appairage actuel.</p>${pairControls()}</details>
+      <button type="button" class="btn danger-text full" data-act="disconnect">Déconnecter ce téléphone</button>
+      <p class="muted small">Supprime les données stockées sur ce téléphone, y compris les changements pas encore envoyés au PC. Vos données sur le PC ne sont pas touchées.</p></section>
+      <section class="group" aria-labelledby="h-about"><h2 id="h-about">À propos</h2><p class="muted">Client Clusters Android 1.0.1</p></section>`;
   }
 
-  function pairControls(label) {
-    return `<div class="btns"><button class="btn" data-act="scan">Scan QR code</button></div>
-      <label class="field"><span>Or paste the pairing code</span><textarea id="paste" rows="3" placeholder="CCSYNC1...."></textarea></label>
-      <button class="btn sec full" data-act="paste-pair">${label || 'Pair with this code'}</button>`;
-  }
-
+  // ---------- Accueil / Déconnecté ----------
   function welcome() {
-    return `<div class="welcome"><div style="font-size:3rem">&#128205;</div><h1>Client Clusters</h1>
-      <p>Your visits and clients in the field, kept in sync with the Windows app.</p>
-      <ol><li>On your PC, open Client Clusters.</li><li>Go to <strong>Settings &rarr; Sync &rarr; Add a phone</strong>.</li><li>Scan the QR code here, or paste the pairing code below.</li></ol>
-      <div class="card" style="text-align:left">${pairControls()}</div></div>`;
+    return `<div class="welcome">${ic('i-pin', 'big')}<h2 class="wtitle">Client Clusters</h2>
+      <p>Vos visites et vos clients sur le terrain, synchronisés avec l’application Windows.</p>
+      <ol><li>Sur votre PC, ouvrez Client Clusters.</li><li>Allez dans ${T.q('Settings')}, puis ${T.q('Sync')}, puis ${T.q('Add a phone…')}.</li><li>Scannez le code QR ici, ou collez le code d’appairage ci-dessous.</li></ol>
+      ${pairField()}</div>`;
+  }
+
+  // The phone's data could not be read at start: plain words and the one action that exists (delete the data, pair again).
+  function fatal(detail) {
+    return `<div class="welcome">${ic('i-alert', 'big')}<h2 class="wtitle">Les données de ce téléphone n’ont pas pu être lues.</h2>
+      <p>Fermez puis rouvrez l’application. Si ce message revient, supprimez les données de ce téléphone puis appairez-le à nouveau${NB}: elles reviendront du PC à la prochaine synchronisation. Les changements pas encore envoyés au PC seront aussi supprimés.</p>
+      <button type="button" class="btn danger-text full" data-act="disconnect">Supprimer les données de ce téléphone</button>
+      ${detail ? `<details class="fold"><summary>Détails techniques${ic('i-chev', 'chev')}</summary><p class="muted small">${esc(detail)}</p></details>` : ''}</div>`;
   }
 
   function disconnected() {
-    return `<div class="welcome"><div style="font-size:3rem">&#9888;</div><h1>This phone was disconnected from the PC</h1>
-      <p>The PC removed this phone from sync. Your data and any changes not yet sent are still on this phone. To keep them, create a new pairing code on the PC (Settings &rarr; Sync &rarr; Add a phone) and pair again.</p>
-      <div class="card" style="text-align:left">${pairControls('Pair again with this code')}</div>
-      <p class="muted small">If you do not need the data on this phone any more:</p>
-      <div class="btns"><button class="btn danger" data-act="disconnect">Remove data from this phone</button></div></div>`;
+    return `<div class="welcome">${ic('i-alert', 'big')}<h2 class="wtitle">Ce téléphone a été déconnecté du PC</h2>
+      <p>Le PC a retiré ce téléphone de la synchro. Vos données et les changements non envoyés sont toujours sur ce téléphone. Pour les garder, créez un nouveau code d’appairage sur le PC (${T.q('Settings')}, ${T.q('Sync')}, ${T.q('Add a phone…')}) puis appairez à nouveau.</p>
+      ${pairField()}
+      <p class="muted small">Si vous n’avez plus besoin des données de ce téléphone${NB}:</p>
+      <button type="button" class="btn danger-text full" data-act="disconnect">Supprimer les données de ce téléphone</button></div>`;
   }
 
-  return { PROSPECT_STATUS, today, client, prospects, prospectRows, prospect, settings, welcome, disconnected, groupColor };
+  // ---------- bottom action bar ----------
+  // Detail actions (and pairing buttons). The primary list action ("Noter une visite") is fab() below.
+  function bar({ mode, sel }) {
+    if (mode === 'welcome' || mode === 'disconnected') {
+      return `<button type="button" class="btn grow" data-act="scan">Scanner le code QR</button><button type="button" class="btn tonal grow" data-act="paste-pair">${mode === 'welcome' ? 'Appairer avec ce code' : 'Appairer à nouveau'}</button>`;
+    }
+    if (mode !== 'app') return '';
+    if (sel && sel.kind === 'client') return clientBar(sel.id);
+    if (sel && sel.kind === 'prospect') return prospectBar(sel.id);
+    return '';
+  }
+  // Aujourd’hui's primary action: a bar in the compact dock, an extended FAB in the list pane on wider windows.
+  const fab = () => `<button type="button" class="btn grow" data-act="picker-open">${ic('i-plus')}<span>Noter une visite</span></button>`;
+
+  // ---------- panes without a selection ----------
+  const detailEmpty = () => `<div class="placeholder"><p>${esc('Choisissez un client ou un prospect.')}</p></div>`;
+  // The "Sur la carte" list: an empty host that map.js fills (and keeps up to date) with what is on screen.
+  const mapList = () => '<div id="os-pane" class="os-pane"></div>';
+  const plannedToday = () => plannedItems().today;
+
+  // ---------- bottom sheets ----------
+  const sheetHead = (title, sub) => `<div class="sheet-head"><div><h2 id="sheet-title">${esc(title)}</h2>${sub ? `<p class="muted small">${esc(sub)}</p>` : ''}</div>
+    <button type="button" class="icon-btn" data-act="sheet-close" aria-label="Fermer">${ic('i-x')}</button></div>`;
+  const wrapSheet = (inner, cls = '', id = '') => `<div class="scrim" data-act="sheet-close"></div><div class="sheet ${cls}"${id ? ` id="${id}"` : ''} role="dialog" aria-modal="true" aria-labelledby="sheet-title">${inner}</div>`;
+
+  function logSheet(id) {
+    const c = App.proj.clients[id];
+    if (!c) return '';
+    const f = k => 'log:' + id + ':' + k;
+    const d = { date: draft(f('date'), U.todayISO()), type: draft(f('type'), 'visit'), outcome: draft(f('outcome'), ''), note: draft(f('note'), '') };
+    const sel = (a, b) => (a === b ? ' selected' : '');
+    const outcomes = Object.keys(Visits.OUTCOMES).map(k => `<option value="${esc(k)}"${sel(k, d.outcome)}>${esc(T.outcomes[k] || Visits.OUTCOMES[k])}</option>`).join('');
+    return wrapSheet(`${sheetHead('Noter une visite', c.name)}
+      <div class="sheet-body" id="logform-fields">
+      <label class="field"><span>Date</span><input type="date" id="lv-date" value="${esc(d.date)}"></label>
+      <p class="muted small hint">Une date à venir crée une visite prévue.</p>
+      <label class="field"><span>Type</span><select id="lv-type"><option value="visit"${sel('visit', d.type)}>${T.types.visit}</option><option value="call"${sel('call', d.type)}>${T.types.call}</option></select></label>
+      <label class="field"><span>Résultat</span><select id="lv-outcome">${outcomes}</select></label>
+      <label class="field"><span>Note</span><textarea id="lv-note" placeholder="Que s’est-il passé${NB}?">${esc(d.note)}</textarea></label></div>
+      <div class="sheet-foot"><button type="button" class="btn full" data-act="log-save" data-id="${esc(c.id)}">Enregistrer la visite</button></div>`, 'sheet-log', 'logform');
+  }
+
+  function pickerRows(q) {
+    const needle = (q || '').trim().toLowerCase();
+    const list = clients().filter(c => !needle || [c.name, c.city, c.address, c.postcode].some(x => String(x || '').toLowerCase().includes(needle))).sort(byName);
+    if (!list.length) {
+      return needle ? empty(`Aucun client ne correspond à ${T.q(q.trim())}.`, '') : empty('Aucun client sur ce téléphone.', '');
+    }
+    return list.map(c => `<button type="button" class="row row-p" data-act="pick-client" data-id="${esc(c.id)}"><span class="grow"><span class="name">${esc(c.name)}</span><span class="sub">${esc(c.city || town(c) || c.address || '')}</span></span></button>`).join('');
+  }
+
+  function pickerSheet(q) {
+    return wrapSheet(`${sheetHead('Noter une visite', 'Choisissez un client')}
+      <div class="sheet-body sheet-scroll"><label class="sr" for="cpick-q">Rechercher un client</label>
+      <input type="search" id="cpick-q" data-autofocus placeholder="Rechercher un client" autocomplete="off" value="${esc(q || '')}">
+      <div id="cpick-list">${pickerRows(q)}</div></div>`);
+  }
+
+  function callSheet(coll, id) {
+    const e = App.proj[coll] && App.proj[coll][id];
+    if (!e) return '';
+    return wrapSheet(`${sheetHead('Appeler', e.name)}<div class="sheet-body">${U.phonesOf(e).map(p => `<button type="button" class="btn tonal full" data-act="call" data-url="tel:${esc(p.tel)}">${ic('i-phone')}<span>${esc(p.text)}</span></button>`).join('')}</div>`);
+  }
+
+  // Overlap pick-list: several items at (almost) the same spot; an accessible alternative to spiderfy.
+  function pickSheet(s) {
+    const items = (s.items || []).map(i => [i.kind, (i.kind === 'client' ? App.proj.clients : App.proj.prospects)[i.id]]).filter(x => x[1]);
+    if (!items.length) return '';
+    const orders = MapKit.todayOrders(), n = items.length;
+    return wrapSheet(`${sheetHead(`${n} ${n > 1 ? 'éléments' : 'élément'} à cet endroit`)}<div class="sheet-body">${items.map(([k, e]) => MapKit.row(k, e, k === 'client' ? orders.get(e.id) : 0, isSel(k, e.id))).join('')}</div>
+      <div class="sheet-foot"><button type="button" class="btn sec full" data-act="pick-spiderfy">Les écarter sur la carte</button></div>`);
+  }
+
+  function sheet(ui) {
+    const s = ui.sheet;
+    if (!s) return '';
+    if (s.kind === 'log') return logSheet(s.id);
+    if (s.kind === 'picker') return pickerSheet(s.q);
+    if (s.kind === 'call') return callSheet(s.coll, s.id);
+    if (s.kind === 'pick') return pickSheet(s);
+    return '';
+  }
+
+  return { PROSPECT_STATUS, statusKey, diamond, syncPill, today, client, prospects, prospectChips, prospectRows, prospect, settings, welcome, disconnected, fatal, isEmptyProject, hasClients, emptyClients, bar, fab, detailEmpty, mapList, plannedToday, sheet, pickerRows, pendingVisit, groupColor, empty };
 })();
