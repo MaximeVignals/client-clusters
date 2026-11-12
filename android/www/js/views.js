@@ -278,7 +278,7 @@ const Views = (() => {
         <p class="muted small">Scannez le code d’un autre PC ou collez-le ici. Cela remplace l’appairage actuel.</p>${pairControls()}</details>
       <button type="button" class="btn danger-text full" data-act="disconnect">Déconnecter ce téléphone</button>
       <p class="muted small">Supprime les données stockées sur ce téléphone, y compris les changements pas encore envoyés au PC. Vos données sur le PC ne sont pas touchées.</p></section>
-      <section class="group" aria-labelledby="h-about"><h2 id="h-about">À propos</h2><p class="muted">Client Clusters Android 1.0.1</p></section>`;
+      <section class="group" aria-labelledby="h-about"><h2 id="h-about">À propos</h2><p class="muted">Client Clusters Android 1.1.0</p></section>`;
   }
 
   // ---------- Accueil / Déconnecté ----------
